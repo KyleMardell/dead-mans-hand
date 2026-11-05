@@ -1,0 +1,170 @@
+{
+  "seed": 20261105,
+  "methodology": "Alternating seats; independent 24-card decks; 95% Wilson intervals; informed greedy player for bosses; conservation is a one-step heuristic, not optimal play.",
+  "matchups": {
+    "greedy vs greedy": {
+      "encounters": 5000,
+      "playerWinPct": 49.96,
+      "ci95": [
+        48.57,
+        51.35
+      ],
+      "averageHands": 2.654,
+      "tiedHandPct": 6.02,
+      "encountersRefreshedPct": 0,
+      "refreshes": 0,
+      "maxHands": 7
+    },
+    "greedy vs random": {
+      "encounters": 5000,
+      "playerWinPct": 95.66,
+      "ci95": [
+        95.06,
+        96.19
+      ],
+      "averageHands": 2.252,
+      "tiedHandPct": 1.661,
+      "encountersRefreshedPct": 0,
+      "refreshes": 0,
+      "maxHands": 5
+    },
+    "conserve vs greedy": {
+      "encounters": 5000,
+      "playerWinPct": 52.66,
+      "ci95": [
+        51.27,
+        54.04
+      ],
+      "averageHands": 2.665,
+      "tiedHandPct": 5.876,
+      "encountersRefreshedPct": 0,
+      "refreshes": 0,
+      "maxHands": 7
+    },
+    "informed vs greedy": {
+      "encounters": 5000,
+      "playerWinPct": 71.82,
+      "ci95": [
+        70.56,
+        73.05
+      ],
+      "averageHands": 2.616,
+      "tiedHandPct": 6.49,
+      "encountersRefreshedPct": 0.1,
+      "refreshes": 5,
+      "maxHands": 8
+    },
+    "low vs greedy": {
+      "encounters": 5000,
+      "playerWinPct": 63.9,
+      "ci95": [
+        62.56,
+        65.22
+      ],
+      "averageHands": 2.641,
+      "tiedHandPct": 6.052,
+      "encountersRefreshedPct": 0.12,
+      "refreshes": 6,
+      "maxHands": 7
+    },
+    "informed vs low": {
+      "encounters": 5000,
+      "playerWinPct": 59.46,
+      "ci95": [
+        58.09,
+        60.81
+      ],
+      "averageHands": 2.713,
+      "tiedHandPct": 8.058,
+      "encountersRefreshedPct": 0.24,
+      "refreshes": 12,
+      "maxHands": 6
+    },
+    "planner vs informed": {
+      "encounters": 5000,
+      "playerWinPct": 54.84,
+      "ci95": [
+        53.46,
+        56.22
+      ],
+      "averageHands": 2.725,
+      "tiedHandPct": 8.075,
+      "encountersRefreshedPct": 0.16,
+      "refreshes": 8,
+      "maxHands": 7
+    }
+  },
+  "bosses": [
+    {
+      "name": "The Drifter",
+      "encounters": 5000,
+      "playerWinPct": 96.8,
+      "ci95": [
+        96.28,
+        97.25
+      ],
+      "averageHands": 2.248,
+      "tiedHandPct": 2.429,
+      "encountersRefreshedPct": 0,
+      "refreshes": 0,
+      "maxHands": 5
+    },
+    {
+      "name": "The Gambler",
+      "encounters": 5000,
+      "playerWinPct": 84.68,
+      "ci95": [
+        83.66,
+        85.65
+      ],
+      "averageHands": 2.487,
+      "tiedHandPct": 4.416,
+      "encountersRefreshedPct": 0.02,
+      "refreshes": 1,
+      "maxHands": 6
+    },
+    {
+      "name": "The Deputy",
+      "encounters": 5000,
+      "playerWinPct": 80.88,
+      "ci95": [
+        79.77,
+        81.95
+      ],
+      "averageHands": 2.531,
+      "tiedHandPct": 5.595,
+      "encountersRefreshedPct": 0.04,
+      "refreshes": 2,
+      "maxHands": 8
+    },
+    {
+      "name": "The Sheriff",
+      "encounters": 5000,
+      "playerWinPct": 71.12,
+      "ci95": [
+        69.85,
+        72.36
+      ],
+      "averageHands": 2.638,
+      "tiedHandPct": 6.771,
+      "encountersRefreshedPct": 0.14,
+      "refreshes": 7,
+      "maxHands": 7
+    },
+    {
+      "name": "The Undertaker",
+      "encounters": 5000,
+      "playerWinPct": 50.34,
+      "ci95": [
+        48.95,
+        51.73
+      ],
+      "averageHands": 2.702,
+      "tiedHandPct": 7.536,
+      "encountersRefreshedPct": 0.14,
+      "refreshes": 7,
+      "maxHands": 6
+    }
+  ],
+  "independentRunCompletionEstimatePct": 23.74
+}
