@@ -10,17 +10,19 @@
   <script defer src="app.js"></script>
 </head>
 <body>
-  <header class="masthead"><a href="./index.html" aria-label="Dead Man’s Hand home">DM<span>♠</span>H</a><span>THE FIRST FIVE <i>•</i> PLAYTEST 01</span><button id="rules-toggle" class="quiet" aria-expanded="false" aria-controls="rules">How to play</button></header>
+  <header class="masthead"><a href="./index.html" aria-label="Dead Man’s Hand home">DM<span>♠</span>H</a><span>THE FIRST FIVE <i>•</i> PLAYTEST 01</span><button id="rules-toggle" class="quiet" aria-haspopup="dialog" aria-expanded="false" aria-controls="rules">How to play</button></header>
   <main id="app"></main>
-  <section id="rules" class="rules" hidden>
-    <h2>The rules of the table</h2>
-    <p>Each side has its own 24-card deck: 9 through Ace, four suits. Draw five, optionally replace one card, then choose three to play. Your other two cards carry into the next hand; draw back to five.</p>
+  <dialog id="rules" class="rules" aria-labelledby="rules-title">
+    <div class="rules-heading"><h2 id="rules-title">The rules of the table</h2><button id="rules-close" class="quiet" autofocus aria-label="Close how to play">Close ×</button></div>
+    <div class="rules-content" tabindex="0" role="region" aria-label="Game instructions">
+    <p>Each side has its own 24-card deck: 9 through Ace, four suits. Draw five, optionally select one card and press Discard to draw a new one, then choose three to play. Your other two cards carry into the next hand; draw back to five.</p>
     <p><strong>First to two wins takes the encounter.</strong> Equal hands score nothing. Lose one encounter and the run ends. Beat five bosses to finish, then choose endless if you wish.</p>
     <ol class="rankings"><li>Straight flush</li><li>Three of a kind</li><li>Straight</li><li>Flush</li><li>Pair</li><li>High card</li></ol>
     <p>Higher ranks break ties, then kickers. Suits are equal. Ace is high; A–9–10 does not form a straight. Played and discarded cards stay out of your deck until the next boss.</p>
     <p><strong>Approved tie exception:</strong> if either side cannot refill to five, both receive fresh decks and five new cards. The score stays. The table announces this.</p>
     <p>Bosses follow your rules, with different decision skills. They cannot see your hidden cards or their next draw. No shop, upgrades or extra lives.</p>
-  </section>
+  </div>
+  </dialog>
   <footer class="site-footer">NO WAGERS. NO SECOND LIVES. <span>JUST THE CARDS YOU KEEP.</span></footer>
 </body>
 </html>

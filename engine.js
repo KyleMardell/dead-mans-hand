@@ -71,13 +71,18 @@
     if (style !== 'conserve' || final) return strongest(hand);
     return opts.reduce((a, b) => utility(b, style, final) > utility(a, style, final) ? b : a);
   }
-  function newSide(random) { const pile = shuffle(deck(), random); return { hand: pile.splice(0, 5), pile, out: [], discarded: false }; }
+  function newSide(random) { const pile = shuffle(deck(), random); return { hand: pile.splice(0, 5), pile, out: [], discarded: false, discardAllowance: 1, discardsUsed: 0 }; }
   function newEncounter(random = Math.random) { return { sides: [newSide(random), newSide(random)], wins: [0, 0], handNumber: 1, ties: 0, refreshes: 0, winner: null, phase: 'choose', last: null }; }
   function discard(state, sideIndex, card) {
     const side = state.sides[sideIndex];
-    if (state.phase !== 'choose' || side.discarded || !side.pile.length || !side.hand.includes(card)) throw Error('Replacement unavailable.');
-    side.hand[side.hand.indexOf(card)] = side.pile.shift(); side.out.push(card); side.discarded = true;
+    const cards = Array.isArray(card) ? card : [card];
+    // Validate the complete batch before consuming any cards or allowance.
+    if (state.phase !== 'choose' || !cards.length || cards.length > remainingDiscards(side) || cards.length > side.pile.length || new Set(cards).size !== cards.length || !cards.every(c => side.hand.includes(c))) throw Error('Discard unavailable.');
+    cards.forEach(c => { side.hand[side.hand.indexOf(c)] = side.pile.shift(); side.out.push(c); });
+    side.discardsUsed = (side.discardsUsed || 0) + cards.length;
+    side.discarded = side.discardsUsed >= (side.discardAllowance ?? 1);
   }
+  function remainingDiscards(side) { return side.discarded ? 0 : Math.max(0, (side.discardAllowance ?? 1) - (side.discardsUsed || 0)); }
   function bestUtility(hand, style, final) { return utility(choose(hand, style, () => 0, final), style, final); }
   function discardChoice(side, method, style = 'greedy', final = false) {
     if (method === 'none' || side.discarded || !side.pile.length) return null;
@@ -115,7 +120,7 @@
     let refreshed = false;
     if (state.sides.some(side => side.pile.length < 5 - side.hand.length)) {
       state.sides = [newSide(random), newSide(random)]; state.refreshes++; refreshed = true;
-    } else state.sides.forEach(side => { side.hand.push(...side.pile.splice(0, 5 - side.hand.length)); side.discarded = false; });
+    } else state.sides.forEach(side => { side.hand.push(...side.pile.splice(0, 5 - side.hand.length)); side.discarded = false; side.discardsUsed = 0; });
     state.handNumber++; state.phase = 'choose'; return refreshed;
   }
   const policies = {
@@ -142,7 +147,7 @@
     }
     throw Error('Simulation did not terminate within 1000 hands.');
   }
-  const api = { ranks, suits, names, deck, rank, suit, label, rng, shuffle, combinations, evaluate, score, strongest, prepareModel, choose, newEncounter, discard, discardChoice, aiTurn, reveal, nextHand, policies, bosses, simulate };
+  const api = { ranks, suits, names, deck, rank, suit, label, rng, shuffle, combinations, evaluate, score, strongest, prepareModel, choose, newEncounter, discard, remainingDiscards, discardChoice, aiTurn, reveal, nextHand, policies, bosses, simulate };
   if (typeof module !== 'undefined') module.exports = api;
   else root.DMH = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

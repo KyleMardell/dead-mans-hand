@@ -60,3 +60,31 @@ test('one depleted side refreshes both, while an empty pile forbids replacement'
   assert.deepEqual(s.wins,wins);
   s.sides.forEach(x=>{assert.equal(x.pile.length,19);assert.equal(x.out.length,0);assert.equal(x.hand.length,5);});
 });
+
+test('batch discards validate allowance, duplicates, held cards and draw supply atomically', () => {
+  const s=G.newEncounter(G.rng(42)),side=s.sides[0],cards=side.hand.slice(0,2);
+  assert.equal(G.remainingDiscards(side),1);
+  const unchanged=()=>JSON.stringify(s);
+  let before=unchanged();assert.throws(()=>G.discard(s,0,cards));assert.equal(unchanged(),before);
+  side.discardAllowance=2;
+  for(const invalid of [[],[cards[0],cards[0]],[cards[0],side.pile[0]]]){
+    before=unchanged();assert.throws(()=>G.discard(s,0,invalid));assert.equal(unchanged(),before);
+  }
+  side.out.push(...side.pile.splice(1));
+  before=unchanged();assert.throws(()=>G.discard(s,0,cards));assert.equal(unchanged(),before);
+  G.discard(s,0,[cards[0]]);assert.equal(side.hand.length,5);assert.equal(side.pile.length,0);
+  assert.equal(G.remainingDiscards(side),1);assert.ok(side.out.includes(cards[0]));
+  before=unchanged();assert.throws(()=>G.discard(s,0,cards[1]));assert.equal(unchanged(),before);
+});
+
+test('two-card batch preserves card accounting and per-hand allowance resets', () => {
+  const s=G.newEncounter(G.rng(3)),side=s.sides[0];side.discardAllowance=2;
+  const cards=side.hand.slice(0,2),draws=side.pile.slice(0,2);
+  G.discard(s,0,cards);
+  assert.ok(draws.every(c=>side.hand.includes(c)));assert.ok(cards.every(c=>side.out.includes(c)));
+  assert.equal(side.hand.length,5);assert.equal(side.pile.length,17);assert.equal(G.remainingDiscards(side),0);
+  assert.equal(new Set([...side.hand,...side.pile,...side.out]).size,24);
+  G.reveal(s,s.sides.map(x=>x.hand.slice(0,3)));G.nextHand(s,G.rng(4));
+  assert.equal(G.remainingDiscards(s.sides[0]),2);assert.equal(s.sides[0].discardsUsed,0);
+  assert.equal(G.remainingDiscards(s.sides[1]),1);
+});
