@@ -7,21 +7,68 @@
   <title>Dead Man’s Hand · Playtest</title>
   <link rel="stylesheet" href="style.css">
   <script defer src="engine.js"></script>
+  <script defer src="upgrades.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
-  <header class="masthead"><a href="./index.html" aria-label="Dead Man’s Hand home">DM<span>♠</span>H</a><span>THE FIRST FIVE <i>•</i> PLAYTEST 01</span><button id="rules-toggle" class="quiet" aria-haspopup="dialog" aria-expanded="false" aria-controls="rules">How to play</button></header>
+  <header class="masthead"><a href="./index.html" aria-label="Dead Man’s Hand home">DM<span>♠</span>H</a><span>THE FIRST FIVE <i>•</i> PLAYTEST 01</span><div class="masthead-tools"><button id="upgrades-toggle" class="quiet" aria-haspopup="dialog" aria-expanded="false" aria-controls="upgrades-dialog" hidden>Upgrades</button><button id="rules-toggle" class="quiet" aria-haspopup="dialog" aria-expanded="false" aria-controls="rules">How to play</button></div></header>
   <main id="app"></main>
   <dialog id="rules" class="rules" aria-labelledby="rules-title">
-    <div class="rules-heading"><h2 id="rules-title">The rules of the table</h2><button id="rules-close" class="quiet" autofocus aria-label="Close how to play">Close ×</button></div>
+    <div class="rules-heading rules-titlebar"><div><h2 id="rules-title">Dead Man&rsquo;s Hand</h2><p class="rules-subtitle">Three Card Poker Roguelite</p></div><button id="rules-close" class="quiet" autofocus aria-label="Close how to play">Close &times;</button></div>
     <div class="rules-content" tabindex="0" role="region" aria-label="Game instructions">
-    <p>Each side has its own 24-card deck: 9 through Ace, four suits. Draw five, optionally select one card and press Discard to draw a new one, then choose three to play. Your other two cards carry into the next hand; draw back to five.</p>
-    <p><strong>First to two wins takes the encounter.</strong> Equal hands score nothing. Lose one encounter and the run ends. Beat five bosses to finish, then choose endless if you wish.</p>
-    <ol class="rankings"><li>Straight flush</li><li>Three of a kind</li><li>Straight</li><li>Flush</li><li>Pair</li><li>High card</li></ol>
-    <p>Higher ranks break ties, then kickers. Suits are equal. Ace is high; A–9–10 does not form a straight. Played and discarded cards stay out of your deck until the next boss.</p>
-    <p><strong>Approved tie exception:</strong> if either side cannot refill to five, both receive fresh decks and five new cards. The score stays. The table announces this.</p>
-    <p>Bosses follow your rules, with different decision skills. They cannot see your hidden cards or their next draw. No shop, upgrades or extra lives.</p>
-  </div>
+      <p class="rules-introduction">Five Western opponents stand between you and daylight. Build your poker hands, choose what to discard and earn upgrades to face the next boss.</p>
+      <section class="rules-section" aria-labelledby="rankings-title">
+        <h3 id="rankings-title">Poker hand rankings</h3>
+        <p class="rules-caption">Strongest to weakest &middot; Three cards only</p>
+        <ol class="poker-rankings">
+        <li><div class="ranking-copy"><strong>Straight Flush</strong><span>Three in sequence, one suit.</span></div><span class="ranking-example" data-example="8,12,16" role="img" aria-label="Example: J of spades, Q of spades, K of spades"><span class="card" aria-hidden="true"><span>J</span><span class="pip">&#9824;</span></span><span class="card" aria-hidden="true"><span>Q</span><span class="pip">&#9824;</span></span><span class="card" aria-hidden="true"><span>K</span><span class="pip">&#9824;</span></span></span></li>
+        <li><div class="ranking-copy"><strong>Three of a Kind</strong><span>Three cards of the same rank.</span></div><span class="ranking-example" data-example="16,17,18" role="img" aria-label="Example: K of spades, K of hearts, K of clubs"><span class="card" aria-hidden="true"><span>K</span><span class="pip">&#9824;</span></span><span class="card red" aria-hidden="true"><span>K</span><span class="pip">&#9829;</span></span><span class="card" aria-hidden="true"><span>K</span><span class="pip">&#9827;</span></span></span></li>
+        <li><div class="ranking-copy"><strong>Straight</strong><span>Three in sequence, mixed suits.</span></div><span class="ranking-example" data-example="8,13,18" role="img" aria-label="Example: J of spades, Q of hearts, K of clubs"><span class="card" aria-hidden="true"><span>J</span><span class="pip">&#9824;</span></span><span class="card red" aria-hidden="true"><span>Q</span><span class="pip">&#9829;</span></span><span class="card" aria-hidden="true"><span>K</span><span class="pip">&#9827;</span></span></span></li>
+        <li><div class="ranking-copy"><strong>Flush</strong><span>One suit, outside a sequence.</span></div><span class="ranking-example" data-example="0,8,20" role="img" aria-label="Example: 9 of spades, J of spades, A of spades"><span class="card" aria-hidden="true"><span>9</span><span class="pip">&#9824;</span></span><span class="card" aria-hidden="true"><span>J</span><span class="pip">&#9824;</span></span><span class="card" aria-hidden="true"><span>A</span><span class="pip">&#9824;</span></span></span></li>
+        <li><div class="ranking-copy"><strong>Pair</strong><span>Two cards of the same rank.</span></div><span class="ranking-example" data-example="12,13,20" role="img" aria-label="Example: Q of spades, Q of hearts, A of spades"><span class="card" aria-hidden="true"><span>Q</span><span class="pip">&#9824;</span></span><span class="card red" aria-hidden="true"><span>Q</span><span class="pip">&#9829;</span></span><span class="card" aria-hidden="true"><span>A</span><span class="pip">&#9824;</span></span></span></li>
+        <li><div class="ranking-copy"><strong>High Card</strong><span>None of the combinations above.</span></div><span class="ranking-example" data-example="0,9,22" role="img" aria-label="Example: 9 of spades, J of hearts, A of clubs"><span class="card" aria-hidden="true"><span>9</span><span class="pip">&#9824;</span></span><span class="card red" aria-hidden="true"><span>J</span><span class="pip">&#9829;</span></span><span class="card" aria-hidden="true"><span>A</span><span class="pip">&#9827;</span></span></span></li>
+        </ol>
+        <p class="rules-note">Ace is high. Suits have equal value. A&ndash;9&ndash;10 is not a straight. Within the same hand type, compare the highest relevant rank, then the remaining cards (kickers) to break a tie.</p>
+      </section>
+      <section class="rules-section" aria-labelledby="hand-rules-title">
+        <h3 id="hand-rules-title">How a hand works</h3>
+        <p>You and the boss each have your own independently shuffled <strong>24-card deck</strong>: 9, 10, J, Q, K and Ace in all four suits.</p>
+        <ol class="hand-steps">
+          <li><strong>Hold five.</strong> Look for a strong three-card hand, and think about which two cards you want to keep.</li>
+          <li><strong>Discard if you wish.</strong> Start with one discard per hand; upgrades can add more. Select cards and press <strong>Discard</strong> to draw the same number of new cards. Use your allowance together or one card at a time, while your draw pile has enough cards.</li>
+          <li><strong>Play three. Keep two.</strong> Tap a card to select it, or tap again to unselect it. Select exactly three and press <strong>Play Three</strong> against the boss&rsquo;s three cards. You can play without discarding. After a discard your selection clears.</li>
+          <li><strong>Refill and continue.</strong> Your other two cards carry into the next hand; draw three to return to five. Played and discarded cards stay out for the encounter, unless the decks refresh.</li>
+        </ol>
+        <p><strong>First to win two hands takes the encounter.</strong> An exact tie awards no point; play another hand.</p>
+        <p class="rules-callout"><strong>When the decks run low:</strong> if either side cannot refill normally, both decks refresh and both players receive five new cards. The encounter score stays.</p>
+      </section>
+      <section class="rules-section" aria-labelledby="bosses-title">
+        <h3 id="bosses-title">The road through five bosses</h3>
+        <p>Each opponent makes more challenging strategic decisions. They cannot see your hidden cards or their future draws.</p>
+        <ol class="rules-bosses">
+          <li>The Drifter</li><li>The Gambler</li><li>The Deputy</li><li>The Sheriff</li><li>The Undertaker</li>
+        </ol>
+        <p>Lose one boss encounter and your run ends. Defeat all five to complete the initial run, then choose <strong>Endless</strong> to keep playing against the Undertaker&rsquo;s difficulty.</p>
+      </section>
+      <section class="rules-section" aria-labelledby="upgrade-rules-title">
+        <h3 id="upgrade-rules-title">Upgrades</h3>
+        <p>After bosses 1 to 4, choose one of three randomly offered upgrades. The fifth boss completes your run; its reward is offered only if you choose Endless. They last for this run. Collect an upgrade again to improve it to Level 2; <strong>Last Stand is unique</strong> and can only be taken once.</p>
+        <p>Maxed upgrades and an owned Last Stand are not offered again. If fewer than three eligible upgrades remain, you see fewer choices; when none remain, you continue without a reward. Starting a new run clears your upgrades.</p>
+        <dl class="rules-upgrades">
+          <div><dt>Quick Draw</dt><dd>Two discards per hand at Level 1; three at Level 2.</dd></div>
+          <div><dt>Lucky Break</dt><dd>Discard one selected card and choose between two drawn cards; the other goes out. Costs one normal discard. One use per boss, or two at Level 2.</dd></div>
+          <div><dt>Flexible Carry</dt><dd>Between continuing hands, keep two and draw four, then choose one of the six to discard. Costs no normal discard. One use per boss, or two at Level 2; requires enough draw cards.</dd></div>
+          <div><dt>Read the Table</dt><dd>Once per boss, reveal the rank of one card from the boss&rsquo;s already committed trio; two distinct cards at Level 2. Suits stay hidden. Costs no discard.</dd></div>
+          <div><dt>Last Stand</dt><dd>Starting with the next hand after the boss earns one win, gain two extra discards per hand for that encounter. Adds to Quick Draw.</dd></div>
+          <div><dt>Peek Ahead</dt><dd>Always see your actual next draw&rsquo;s rank; Level 2 adds its suit. Costs nothing and never changes deck order.</dd></div>
+        </dl>
+        <p class="rules-note">Active ability uses reset for each boss, not each hand or deck refresh. Open <strong>Upgrades</strong> at the table to review your collection.</p>
+      </section>
+    </div>
+  </dialog>
+  <dialog id="upgrades-dialog" class="rules" aria-labelledby="upgrades-title">
+    <div class="rules-heading"><h2 id="upgrades-title">Your upgrades</h2><button id="upgrades-close" class="quiet" autofocus aria-label="Close upgrades">Close &times;</button></div>
+    <div id="upgrades-content" class="rules-content" tabindex="0" role="region" aria-label="Collected upgrades"></div>
   </dialog>
   <footer class="site-footer">NO WAGERS. NO SECOND LIVES. <span>JUST THE CARDS YOU KEEP.</span></footer>
 </body>

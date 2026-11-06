@@ -88,3 +88,38 @@ test('two-card batch preserves card accounting and per-hand allowance resets', (
   assert.equal(G.remainingDiscards(s.sides[0]),2);assert.equal(s.sides[0].discardsUsed,0);
   assert.equal(G.remainingDiscards(s.sides[1]),1);
 });
+
+test('Quick Draw levels grant only the player 1, 2 or 3 discards; batches and sequential uses reset per hand', () => {
+  for(const level of [0,1,2]) for(const batch of [true,false]){
+    const random=G.rng(52),s=G.newEncounter(random,{'quick-draw':level}),side=s.sides[0];
+    assert.equal(G.remainingDiscards(side),level+1);assert.equal(G.remainingDiscards(s.sides[1]),1);
+    const cards=side.hand.slice(0,level+1);
+    if(batch)G.discard(s,0,cards);else cards.forEach(c=>G.discard(s,0,c));
+    assert.equal(G.remainingDiscards(side),0);assert.equal(side.discardsUsed,level+1);
+    assert.equal(side.hand.length,5);assert.equal(side.pile.length,19-level-1);
+    assert.equal(new Set([...side.hand,...side.pile,...side.out]).size,24);
+    const before=JSON.stringify(s);assert.throws(()=>G.discard(s,0,side.hand[0]));assert.equal(JSON.stringify(s),before);
+    G.reveal(s,s.sides.map(x=>x.hand.slice(0,3)));G.nextHand(s,random);
+    assert.equal(G.remainingDiscards(s.sides[0]),level+1);assert.equal(s.sides[0].discardsUsed,0);
+    assert.equal(G.remainingDiscards(s.sides[1]),1);
+  }
+});
+
+test('Quick Draw survives bilateral exhaustion refreshes without duplicating cards or changing score', () => {
+  const random=G.rng(84),s=G.newEncounter(random,{'quick-draw':2});
+  s.sides[0].out.push(...s.sides[0].pile.splice(2));
+  const before=JSON.stringify(s);
+  assert.throws(()=>G.discard(s,0,s.sides[0].hand.slice(0,3)));assert.equal(JSON.stringify(s),before);
+  G.discard(s,0,s.sides[0].hand.slice(0,2));assert.equal(G.remainingDiscards(s.sides[0]),1);
+  G.reveal(s,s.sides.map(x=>x.hand.slice(0,3)));const wins=[...s.wins];
+  assert.equal(G.nextHand(s,random),true);assert.deepEqual(s.wins,wins);
+  assert.equal(G.remainingDiscards(s.sides[0]),3);assert.equal(G.remainingDiscards(s.sides[1]),1);
+  s.sides.forEach(side=>{assert.equal(side.hand.length,5);assert.equal(side.pile.length,19);assert.equal(side.out.length,0);assert.equal(new Set([...side.hand,...side.pile]).size,24);});
+});
+
+test('Peek Ahead does not change encounter permissions or cards', () => {
+  const baseline=G.newEncounter(G.rng(42));
+  const inert=G.newEncounter(G.rng(42),{'peek-ahead':2});
+  assert.deepEqual({...inert,peekAheadLevel:0},baseline);
+  assert.equal(G.remainingDiscards(G.newEncounter(G.rng(42)).sides[0]),1);
+});

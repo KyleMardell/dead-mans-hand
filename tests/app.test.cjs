@@ -4,15 +4,16 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 const G = require('../engine.js');
+const U = require('../upgrades.js');
 // Exercise real UI event handlers without a browser dependency. Engine fixtures
 // control outcomes so every run transition can be reached deterministically.
-function setup() {
+function setup(upgradeSystem = U) {
   const elements = new Map();
   const document = { getElementById:id=>elements.get(id), body:{classList:{add(){},remove(){}}}, activeElement:null };
-  for (const id of ['app','rules','rules-toggle','rules-close']) elements.set(id,{ innerHTML:'', open:false, attributes:{}, handlers:{}, addEventListener(type,fn){this.handlers[type]=fn;}, querySelector(){return null;}, setAttribute(key,value){this.attributes[key]=value;}, focus(){document.activeElement=this;}, showModal(){this.open=true;}, close(){this.open=false;this.handlers.close();} });
-  const context = vm.createContext({ DMH:G, document, console });
+  for (const id of ['app','rules','rules-toggle','rules-close','upgrades-toggle','upgrades-close','upgrades-dialog','upgrades-content']) elements.set(id,{ innerHTML:'', open:false, attributes:{}, handlers:{}, addEventListener(type,fn){this.handlers[type]=fn;}, querySelector(){return null;}, setAttribute(key,value){this.attributes[key]=value;}, focus(){document.activeElement=this;}, showModal(){this.open=true;}, close(){this.open=false;this.handlers.close();} });
+  const context = vm.createContext({ DMH:G, DMHUpgrades:upgradeSystem, document, console });
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),context);
-  const click = (action, card) => elements.get('app').handlers.click({target:{closest:()=>({disabled:false,dataset: card === undefined ? {action} : {card:String(card)}})}});
+  const click = (action, card, upgrade, candidate, carry) => elements.get('app').handlers.click({target:{closest:()=>({disabled:false,dataset: carry !== undefined ? {carry:String(carry)} : candidate !== undefined ? {candidate:String(candidate)} : card === undefined ? {action,upgrade} : {card:String(card)}})}});
   const read = expression => vm.runInContext(expression, context);
   return { context, click, read, elements, document, html:()=>elements.get('app').innerHTML };
 }
@@ -20,31 +21,94 @@ function fixture(ui, win) {
   vm.runInContext(`{
     const good = [20,21,22,0,1], bad = [0,5,10,11,12];
     const hands = ${win ? '[good,bad]' : '[bad,good]'};
-    state.sides = hands.map(hand=>({hand:[...hand],pile:G.deck().filter(c=>!hand.includes(c)),out:[],discarded:false}));
-    bossPlay = state.sides[1].hand.slice(0,3); selected = []; discardWarning = false; render();
+    state.sides = hands.map((hand,i)=>({hand:[...hand],pile:G.deck().filter(c=>!hand.includes(c)),out:[],discarded:false,discardAllowance:state.sides[i].discardAllowance ?? 1,discardsUsed:0}));
+    state.bossCommitment=null;bossPlay = G.commitBossPlay(state,state.sides[1].hand.slice(0,3)); selected = []; discardWarning = false; render();
   }`,ui.context);
   const cards = ui.read('state.sides[0].hand.slice(0,3)');
   cards.forEach(c=>ui.click(undefined,c)); ui.click('play');
 }
+function claimFirst(ui) {
+  if(ui.read('run.phase') !== 'upgrade') return;
+  ui.click('select-upgrade',undefined,ui.read('run.offers[0]'));
+  ui.click('claim-upgrade');
+}
+
 test('five encounters advance only on victory, finish screen offers optional endless, new run resets', () => {
   const ui = setup(); ui.click('start');
   for(let b=0;b<5;b++) {
+    assert.match(ui.html(),new RegExp('src="assets/images/bosses/'+['drifter','gambler','deputy','sheriff','undertaker'][b]+'[.]png"'));
     assert.equal(ui.read('bossIndex'),b); assert.deepEqual([...ui.read('state.wins')],[0,0]);
     fixture(ui,true); assert.equal(ui.read('state.winner'),null); ui.click('next');
-    fixture(ui,true); assert.equal(ui.read('state.winner'),0); ui.click('victory');
+    fixture(ui,true); assert.equal(ui.read('state.winner'),0); ui.click('victory'); claimFirst(ui);
   }
   assert.match(ui.html(),/You saw daylight/); assert.match(ui.html(),/Play endless/);
-  ui.click('endless'); assert.equal(ui.read('bossIndex'),5); assert.equal(ui.read('endless'),true);
-  assert.match(ui.html(),/ENDLESS &middot; ENCOUNTER 6/); assert.match(ui.html(),/The Undertaker/);
-  fixture(ui,true); ui.click('next'); fixture(ui,true); ui.click('victory');
+  ui.click('endless'); assert.equal(ui.read('run.phase'),'upgrade'); claimFirst(ui);
+  assert.equal(ui.read('bossIndex'),5); assert.equal(ui.read('endless'),true);
+  assert.match(ui.html(),/ENDLESS &middot; ENCOUNTER 6/); assert.match(ui.html(),/The Undertaker/); assert.match(ui.html(),/src="assets\/images\/bosses\/undertaker\.png"/);
+  fixture(ui,true); ui.click('next'); fixture(ui,true); ui.click('victory'); claimFirst(ui);
   assert.equal(ui.read('bossIndex'),6);
   ui.click('start'); assert.equal(ui.read('bossIndex'),0); assert.equal(ui.read('endless'),false);
 });
 test('one encounter defeat ends run and retry starts from boss one', () => {
   const ui = setup(); ui.click('start'); fixture(ui,false); ui.click('next'); fixture(ui,false);
-  assert.equal(ui.read('state.winner'),1); assert.match(ui.html(),/Your run ends here/);
+  assert.equal(ui.read('state.winner'),1); assert.match(ui.html(),/Run over/);
   ui.click('loss'); assert.match(ui.html(),/The house remembers/); assert.match(ui.html(),/0 bosses defeated/);
   ui.click('start'); assert.deepEqual([...ui.read('state.wins')],[0,0]); assert.equal(ui.read('bossIndex'),0);
+});
+
+test('bosses one to four reward normally; final victory defers offer generation and cannot be skipped or claimed twice', () => {
+  let offersGenerated=0;
+  const ui=setup({...U,offer(...args){offersGenerated++;return U.offer(...args);}});ui.click('start');
+  for(let b=0;b<4;b++){
+    fixture(ui,true);ui.click('next');fixture(ui,true);
+    assert.equal(ui.read('run.phase'),'table');ui.click('victory');
+    assert.equal(ui.read('run.phase'),'upgrade');assert.equal(offersGenerated,b+1);
+    assert.equal(ui.read('bossIndex'),b);claimFirst(ui);assert.equal(ui.read('bossIndex'),b+1);
+  }
+  const collection=ui.read('JSON.stringify(run.upgrades)');
+  fixture(ui,true);ui.click('next');fixture(ui,true);
+  assert.equal(ui.read('run.phase'),'complete');assert.match(ui.html(),/You saw daylight/);
+  assert.doesNotMatch(ui.html(),/upgrade-choice|claim-upgrade/);assert.equal(offersGenerated,4);
+  assert.equal(ui.read('JSON.stringify(run.upgrades)'),collection);assert.equal(ui.read('run.offers.length'),0);
+  const complete=ui.read('JSON.stringify({run,bossIndex,endless,state})');
+  for(const action of ['victory','claim-upgrade','next','play'])ui.click(action);
+  ui.click('select-upgrade',undefined,'quick-draw');
+  assert.equal(ui.read('JSON.stringify({run,bossIndex,endless,state})'),complete);
+  ui.click('endless');assert.equal(offersGenerated,5);assert.equal(ui.read('run.phase'),'upgrade');
+  assert.equal(ui.read('bossIndex'),4);assert.equal(ui.read('JSON.stringify(run.upgrades)'),collection);
+  const offers=[...ui.read('run.offers')];
+  assert.ok(offers.every(id=>U.eligible(ui.read('run.upgrades')).some(d=>d.id===id)));
+  for(const action of ['endless','victory','claim-upgrade','next'])ui.click(action);
+  assert.equal(offersGenerated,5);assert.deepEqual([...ui.read('run.offers')],offers);
+  const id=offers[0],before=ui.read('run.upgrades')[id]||0;
+  ui.click('select-upgrade',undefined,id);ui.click('claim-upgrade');
+  assert.equal(ui.read('run.upgrades')[id],before+1);assert.equal(ui.read('bossIndex'),5);
+  assert.equal(ui.read('run.phase'),'table');assert.equal(ui.read('boss()'),G.bosses[4]);
+  const started=ui.read('JSON.stringify({run,bossIndex,endless,state})');
+  for(const action of ['endless','victory','claim-upgrade'])ui.click(action);
+  assert.equal(ui.read('JSON.stringify({run,bossIndex,endless,state})'),started);assert.equal(offersGenerated,5);
+});
+
+test('new run abandons the final reward without generating it and clears collected upgrades', () => {
+  let calls=0;const ui=setup({...U,offer(...args){calls++;return U.offer(...args);}});ui.click('start');
+  ui.read('bossIndex=4;run.upgrades={"quick-draw":2,"last-stand":1};startEncounter()');
+  fixture(ui,true);ui.click('next');fixture(ui,true);assert.equal(ui.read('run.phase'),'complete');
+  assert.equal(calls,0);ui.click('start');
+  assert.equal(ui.read('bossIndex'),0);assert.equal(ui.read('run.phase'),'table');assert.equal(ui.read('endless'),false);
+  assert.equal(ui.read('Object.keys(run.upgrades).length'),0);assert.equal(ui.read('run.offers.length'),0);
+  assert.equal(ui.read('run.selectedUpgrade'),null);assert.equal(ui.read('state.sides[0].discardAllowance'),1);
+  ui.click('endless');ui.click('claim-upgrade');assert.equal(calls,0);assert.equal(ui.read('bossIndex'),0);
+});
+
+test('an exhausted pool still shows completion first and skips reward selection only after Endless', () => {
+  let calls=0;const ui=setup({...U,offer(...args){calls++;return U.offer(...args);}});ui.click('start');
+  ui.read('bossIndex=4;run.upgrades=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));startEncounter()');
+  const collection=ui.read('JSON.stringify(run.upgrades)');fixture(ui,true);ui.click('next');fixture(ui,true);
+  assert.equal(ui.read('run.phase'),'complete');assert.match(ui.html(),/You saw daylight/);assert.equal(calls,0);
+  ui.click('endless');assert.equal(calls,1);assert.equal(ui.read('bossIndex'),5);assert.equal(ui.read('run.phase'),'table');
+  assert.equal(ui.read('run.offers.length'),0);assert.equal(ui.read('JSON.stringify(run.upgrades)'),collection);
+  assert.equal(ui.read('boss()'),G.bosses[4]);assert.match(ui.html(),/ENDLESS &middot; ENCOUNTER 6/);
+  ui.click('endless');ui.click('claim-upgrade');assert.equal(calls,1);assert.equal(ui.read('bossIndex'),5);
 });
 test('selecting and deselecting cards, discarding a selection and playing afterward', () => {
   const ui=setup();ui.click('start');const card=ui.read('state.sides[0].hand[0]');
@@ -56,7 +120,7 @@ test('selecting and deselecting cards, discarding a selection and playing afterw
   assert.equal(ui.read('selected.length'),0);assert.equal(ui.read('state.sides[0].discarded'),true);
   assert.equal(ui.read('state.sides[0].out.includes('+card+')'),true);
   assert.equal(ui.read('JSON.stringify({side:state.sides[1],bossPlay})'),bossBefore);
-  assert.match(ui.html(),/data-action="replace" disabled/);assert.match(ui.html(),/\(0 left\)/);
+  assert.match(ui.html(),/data-action="replace"[^>]*disabled/);assert.match(ui.html(),/aria-label="Discard; 0 remaining"/);
   const after=ui.read('JSON.stringify(state)');ui.click('replace');assert.equal(ui.read('JSON.stringify(state)'),after);
   [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');
   assert.equal(ui.read('state.phase'),'reveal');
@@ -88,13 +152,13 @@ test('three selected cards play without discarding, including after a rejected d
 test('future larger allowances support batch and sequential discards without granting upgrades', () => {
   for(const batch of [true,false]){
     const ui=setup();ui.click('start');vm.runInContext('state.sides[0].discardAllowance=2;render()',ui.context);
-    assert.match(ui.html(),/\(2 left\)/);
+    assert.match(ui.html(),/aria-label="Discard; 2 remaining"/);
     const cards=[...ui.read('state.sides[0].hand.slice(0,2)')];
     if(batch){cards.forEach(c=>ui.click(undefined,c));ui.click('replace');}
     else {for(const card of cards){ui.click(undefined,card);ui.click('replace');}}
     assert.equal(ui.read('state.sides[0].out.length'),2);assert.equal(ui.read('selected.length'),0);
     assert.equal(ui.read('state.sides[0].pile.length'),17);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),0);
-    assert.match(ui.html(),/data-action="replace" disabled/);
+    assert.match(ui.html(),/data-action="replace"[^>]*disabled/);
   }
 });
 
@@ -113,16 +177,315 @@ test('rules modal opens and closes without changing selections or encounter stat
   assert.equal(ui.read('JSON.stringify({state,selected,bossPlay,bossIndex,endless})'),before);
 });
 
-test('centred header uses current/total progress and an uncapped hand indicator', () => {
+test('poster header uses current/total progress and an uncapped hand indicator', () => {
   const ui=setup();ui.click('start');
   assert.match(ui.read('pathMarkup()'),/01 <span class="progress-total">\/ 05/);
-  assert.equal((ui.html().match(/The Drifter/g)||[]).length,1);
+  assert.match(ui.html(),/alt="The Drifter, Western wanted poster"/);
+  assert.match(ui.html(),/<h2 class="boss-fallback" hidden>The Drifter<\/h2>/);
   assert.match(ui.html(),/class="score-hand">Hand 1</);
   vm.runInContext('state.handNumber=4;render()',ui.context);
   assert.match(ui.html(),/class="score-hand">Hand 4</);
   assert.doesNotMatch(ui.html(),/Hand 4\/3|boss-path/);
-  fixture(ui,true);assert.match(ui.html(),/You <b>1<\/b>/);ui.click('next');
+  fixture(ui,true);assert.match(ui.html(),/Boss: 1 of 2 chips remaining/);ui.click('next');
   assert.match(ui.html(),/class="score-hand">Hand 5</);
-  fixture(ui,true);ui.click('victory');
+  fixture(ui,true);ui.click('victory'); claimFirst(ui);
   assert.match(ui.read('pathMarkup()'),/02 <span class="progress-total">\/ 05/);
+});
+
+test('discard illuminates only for valid selections without blocking invalid attempts', () => {
+  const ui=setup();ui.click('start');const cards=[...ui.read('state.sides[0].hand')];
+  assert.match(ui.html(),/class="secondary" data-action="replace"/);
+  assert.doesNotMatch(ui.html(),/Choose three|Ready to play|selection-info/);
+  ui.click(undefined,cards[0]);assert.match(ui.html(),/class="primary" data-action="replace"/);
+  ui.click(undefined,cards[1]);assert.match(ui.html(),/class="secondary" data-action="replace"/);
+  assert.doesNotMatch(ui.html(),/data-action="replace"[^>]*disabled/);
+  ui.click('replace');assert.match(ui.html(),/You can only discard 1 card/);
+  ui.click(undefined,cards[1]);ui.click('replace');
+  assert.equal(ui.read('selected.length'),0);assert.match(ui.html(),/class="secondary" data-action="replace"[^>]*disabled/);
+});
+
+test('chips track the opposing hand wins; ties consume no chips', () => {
+  const ui=setup();ui.click('start');
+  assert.equal((ui.html().match(/class="poker-chip"/g)||[]).length,4);
+  fixture(ui,true);
+  assert.match(ui.read('scoreChips(0)'),/You: 2 of 2 chips remaining/);
+  assert.match(ui.read('scoreChips(1)'),/Boss: 1 of 2 chips remaining/);
+  ui.click('next');fixture(ui,false);
+  assert.match(ui.read('scoreChips(0)'),/You: 1 of 2 chips remaining/);
+  assert.match(ui.read('scoreChips(1)'),/Boss: 1 of 2 chips remaining/);
+  ui.click('next');
+  vm.runInContext('state.sides[1]=JSON.parse(JSON.stringify(state.sides[0]));state.bossCommitment=null;bossPlay=G.commitBossPlay(state,state.sides[1].hand.slice(0,3));selected=[];render()',ui.context);
+  const before=ui.read('scoreChips(0)+scoreChips(1)');
+  [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');
+  assert.equal(ui.read('state.last.result'),0);assert.equal(ui.read('scoreChips(0)+scoreChips(1)'),before);
+});
+
+test('Play button names all six evaluated hand types and defaults otherwise', () => {
+  const triples=[[20,13,2],[0,1,20],[0,8,20],[0,5,10],[0,1,2],[0,4,8]];
+  const names=['High Card','Pair','Flush','Straight','Three of a Kind','Straight Flush'];
+  const ui=setup();ui.click('start');
+  triples.forEach((cards,i)=>{
+    vm.runInContext(`state.sides[0].hand=${JSON.stringify([...cards,...G.deck().filter(c=>!cards.includes(c)).slice(0,2)])};selected=${JSON.stringify(cards)};render()`,ui.context);
+    assert.ok(ui.html().includes('>Play '+names[i]+'</button>'));
+  });
+  vm.runInContext('selected=[];render()',ui.context);assert.match(ui.html(),/>Play Three<\/button>/);
+  vm.runInContext('selected=state.sides[0].hand.slice(0,4);render()',ui.context);assert.match(ui.html(),/>Play Three<\/button>/);
+});
+
+test('encounter announcements replace ordinary hand feedback and retain chips and actions', () => {
+  for(const won of [true,false]){
+    const ui=setup();ui.click('start');fixture(ui,won);
+    assert.match(ui.html(),new RegExp('table-status result-'+(won?'win':'loss')));
+    assert.doesNotMatch(ui.html(),/encounter-result/);
+    ui.click('next');fixture(ui,won);
+    assert.match(ui.html(),/encounter-result/);
+    assert.match(ui.html(),won?/>Boss defeated<\//:/>Run over<\//);
+    assert.match(ui.html(),won?/<p>The Drifter<\/p>/:/Defeated by The Drifter/);
+    assert.doesNotMatch(ui.html(),/You take the hand\.|The boss takes the hand\./);
+    assert.equal((ui.html().match(/class="poker-chip/g)||[]).length,4);
+    assert.equal((ui.html().match(/class="poker-chip spent"/g)||[]).length,2);
+    assert.match(ui.html(),won?/data-action="victory"/:/data-action="loss"/);
+  }
+});
+
+test('reward selection gates advancement, claims once and retains collection with enabled passives', () => {
+  const ui=setup();ui.click('start');fixture(ui,true);ui.click('next');fixture(ui,true);
+  ui.click('victory');assert.equal(ui.read('run.phase'),'upgrade');assert.equal(ui.read('bossIndex'),0);
+  const offers=[...ui.read('run.offers')];assert.equal(offers.length,3);assert.equal(new Set(offers).size,3);
+  assert.match(ui.html(),/data-action="claim-upgrade" disabled/);
+  assert.doesNotMatch(ui.html(),/data-action="play"|data-card=|class="score-hand"/);
+  ui.click('claim-upgrade');ui.click('victory');ui.click('next');
+  ui.click('select-upgrade',undefined,'not-offered');
+  assert.equal(ui.read('bossIndex'),0);assert.equal(ui.read('run.selectedUpgrade'),null);
+  ui.click('select-upgrade',undefined,offers[0]);assert.equal(ui.read('run.selectedUpgrade'),offers[0]);
+  assert.match(ui.html(),/chosen/);assert.match(ui.html(),/All six upgrades are enabled/);
+  ui.elements.get('upgrades-toggle').handlers.click();
+  assert.match(ui.elements.get('upgrades-content').innerHTML,/No upgrades collected yet/);
+  ui.elements.get('upgrades-close').handlers.click();
+  assert.deepEqual([...ui.read('run.offers')],offers);
+  ui.click('claim-upgrade');assert.equal(ui.read('bossIndex'),1);assert.equal(ui.read('run.upgrades')[offers[0]],1);
+  ui.click('claim-upgrade');assert.equal(ui.read('run.upgrades')[offers[0]],1);
+  assert.equal(ui.read('state.sides[0].discardAllowance'),offers[0]==='quick-draw'?2:1);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),offers[0]==='quick-draw'?2:1);
+  assert.equal(ui.read('state.sides[0].hand.length'),5);
+  ui.click('start');assert.equal(Object.keys(ui.read('run.upgrades')).length,0);
+});
+
+test('repeat rewards show improvements; endless advances normally when every upgrade is maxed', () => {
+  const ui=setup();ui.click('start');
+  const max=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));max['quick-draw']=1;
+  vm.runInContext(`run.upgrades=${JSON.stringify(max)};endless=true;bossIndex=5`,ui.context);
+  fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+  assert.deepEqual([...ui.read('run.offers')],['quick-draw']);assert.match(ui.html(),/Improve: Level 1 &rarr; 2/);
+  claimFirst(ui);assert.equal(ui.read('run.upgrades["quick-draw"]'),2);assert.equal(ui.read('bossIndex'),6);
+  assert.equal(ui.read('state.sides[0].discardAllowance'),3);
+  fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+  assert.equal(ui.read('bossIndex'),7);assert.equal(ui.read('run.phase'),'table');
+  assert.equal(Object.keys(ui.read('run.upgrades')).length,6);
+  fixture(ui,false);ui.click('next');fixture(ui,false);ui.click('loss');
+  assert.match(ui.html(),/The house remembers/);ui.click('start');
+  assert.equal(Object.keys(ui.read('run.upgrades')).length,0);assert.equal(ui.read('endless'),false);
+});
+
+test('Quick Draw run levels drive counters, illumination, batch/sequential use and new-run reset', () => {
+  for(const level of [1,2]) for(const batch of [true,false]){
+    const ui=setup();ui.click('start');
+    vm.runInContext(`run.upgrades={'quick-draw':${level}};startEncounter()`,ui.context);
+    const count=level+1,cards=[...ui.read('state.sides[0].hand')];
+    assert.match(ui.html(),new RegExp('aria-label="Discard; '+count+' remaining"'));
+    cards.slice(0,count+1).forEach(c=>ui.click(undefined,c));const before=ui.read('JSON.stringify(state)');
+    ui.click('replace');assert.equal(ui.read('JSON.stringify(state)'),before);assert.match(ui.html(),new RegExp('only discard '+count+' cards'));
+    cards.forEach(c=>{if(ui.read('selected.includes('+c+')'))ui.click(undefined,c);});
+    if(batch){cards.slice(0,count).forEach(c=>ui.click(undefined,c));assert.match(ui.html(),/class="primary" data-action="replace"/);ui.click('replace');}
+    else cards.slice(0,count).forEach(c=>{ui.click(undefined,c);ui.click('replace');});
+    assert.equal(ui.read('selected.length'),0);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),0);
+    assert.equal(ui.read('state.sides[0].out.length'),count);assert.match(ui.html(),/data-action="replace"[^>]*disabled/);
+    [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');ui.click('next');
+    assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),count);assert.equal(ui.read('state.sides[1].discardAllowance'),1);
+    ui.click('start');assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),1);
+  }
+});
+
+test('insufficient draw supply gives a specific warning and preserves selection, cards and allowance', () => {
+  const ui=setup();ui.click('start');
+  vm.runInContext('run.upgrades={"quick-draw":2};startEncounter();state.sides[0].out.push(...state.sides[0].pile.splice(1));render()',ui.context);
+  [...ui.read('state.sides[0].hand.slice(0,2)')].forEach(c=>ui.click(undefined,c));
+  assert.match(ui.html(),/aria-label="Discard; 3 remaining"/);assert.match(ui.html(),/class="secondary" data-action="replace"/);
+  const before=ui.read('JSON.stringify({state,selected,bossPlay})');ui.click('replace');
+  assert.equal(ui.read('JSON.stringify({state,selected,bossPlay})'),before);assert.match(ui.html(),/Only 1 card remains in your draw pile/);
+  ui.click(undefined,ui.read('selected[1]'));ui.click('replace');
+  assert.equal(ui.read('state.sides[0].pile.length'),0);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),2);
+  assert.match(ui.html(),/data-action="replace"[^>]*disabled/);assert.match(ui.html(),/Your draw pile is empty/);
+});
+
+test('Quick Draw can be skipped before playing three and collection labels only implemented upgrades as enabled', () => {
+  const ui=setup();ui.click('start');
+  vm.runInContext('run.upgrades=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));startEncounter()',ui.context);
+  const markup=ui.read('upgradeCollectionMarkup()');assert.equal((markup.match(/Enabled/g)||[]).length,6);assert.equal((markup.match(/Not yet implemented/g)||[]).length,0);
+  assert.match(markup,/Three discards per hand/);
+  [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');
+  assert.equal(ui.read('state.phase'),'reveal');assert.equal(ui.read('state.sides[0].out.length'),3);assert.equal(ui.read('state.sides[0].discardsUsed'),0);
+});
+
+test('Lucky Break requires a confirmed candidate, blocks table actions and works with Quick Draw', () => {
+  const ui=setup();ui.click('start');assert.doesNotMatch(ui.html(),/data-action="lucky-break"/);
+  vm.runInContext('run.upgrades={"lucky-break":2,"quick-draw":2};startEncounter()',ui.context);
+  assert.match(ui.html(),/Lucky Break; 2 uses remaining/);
+  const bossBefore=ui.read('JSON.stringify({bossPlay,side:state.sides[1]})');
+  ui.click(undefined,ui.read('state.sides[0].hand[0]'));ui.click('lucky-break');
+  assert.equal(ui.read('state.phase'),'lucky-break');assert.equal(ui.read('state.sides[0].hand.length'),4);
+  assert.doesNotMatch(ui.html(),/data-action="play"|data-action="replace"/);
+  assert.match(ui.html(),/data-action="lucky-confirm" disabled/);
+  const pending=ui.read('JSON.stringify(state)');
+  for(const action of ['play','replace','next','victory','loss','start','lucky-break','lucky-confirm'])ui.click(action);
+  assert.equal(ui.read('JSON.stringify(state)'),pending);
+  ui.click(undefined,undefined,undefined,99);assert.equal(ui.read('luckyCandidate'),null);
+  const candidates=[...ui.read('state.luckyBreak.pending.candidates')];
+  ui.click(undefined,undefined,undefined,candidates[0]);assert.equal(ui.read('luckyCandidate'),candidates[0]);
+  assert.doesNotMatch(ui.html(),/data-action="lucky-confirm" disabled/);
+  ui.click('lucky-confirm');assert.equal(ui.read('state.phase'),'choose');assert.equal(ui.read('selected.length'),0);
+  assert.equal(ui.read('state.sides[0].hand.length'),5);assert.equal(ui.read('state.sides[0].out.includes('+candidates[1]+')'),true);
+  assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),2);assert.equal(ui.read('state.luckyBreak.remaining'),1);
+  assert.equal(ui.read('JSON.stringify({bossPlay,side:state.sides[1]})'),bossBefore);
+  [...ui.read('state.sides[0].hand.slice(0,2)')].forEach(c=>ui.click(undefined,c));ui.click('replace');
+  assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),0);
+  [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');ui.click('next');
+  assert.equal(ui.read('state.luckyBreak.remaining'),1);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),3);
+  vm.runInContext('state.wins=[0,0]',ui.context);
+  fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');claimFirst(ui);
+  assert.equal(ui.read('run.upgrades["lucky-break"]'),2);assert.equal(ui.read('state.luckyBreak.remaining'),2);
+  ui.click('start');assert.equal(ui.read('state.luckyBreak.remaining'),0);assert.doesNotMatch(ui.html(),/data-action="lucky-break"/);
+});
+
+test('Lucky Break invalid activation preserves every card and counter', () => {
+  const ui=setup();ui.click('start');
+  vm.runInContext('run.upgrades={"lucky-break":1};startEncounter()',ui.context);
+  const before=ui.read('JSON.stringify(state)');ui.click('lucky-break');assert.equal(ui.read('JSON.stringify(state)'),before);
+  [...ui.read('state.sides[0].hand.slice(0,2)')].forEach(c=>ui.click(undefined,c));ui.click('lucky-break');assert.equal(ui.read('JSON.stringify(state)'),before);
+  ui.click(undefined,ui.read('selected[1]'));
+  vm.runInContext('state.sides[0].out.push(...state.sides[0].pile.splice(1));render()',ui.context);
+  const depleted=ui.read('JSON.stringify(state)');ui.click('lucky-break');assert.equal(ui.read('JSON.stringify(state)'),depleted);
+});
+
+test('Flexible Carry is optional between hands, locks its choice and retains upgrade state across bosses', () => {
+  const ui=setup();ui.click('start');
+  vm.runInContext('run.upgrades={"flexible-carry":2,"quick-draw":2,"lucky-break":2};startEncounter()',ui.context);
+  assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);fixture(ui,true);
+  assert.match(ui.html(),/data-action="flexible-carry"/);assert.match(ui.html(),/2 left/);
+  ui.click('next');assert.equal(ui.read('state.flexibleCarry.remaining'),2);
+  vm.runInContext('state.wins=[0,0]',ui.context);fixture(ui,true);
+  const luckyBefore=ui.read('state.luckyBreak.remaining');ui.click('flexible-carry');
+  assert.equal(ui.read('state.phase'),'flexible-carry');assert.equal((ui.html().match(/data-carry=/g)||[]).length,6);
+  assert.match(ui.html(),/data-action="carry-confirm" disabled/);assert.doesNotMatch(ui.html(),/data-action="play"/);
+  const before=ui.read('JSON.stringify(state)');
+  for(const action of ['play','next','replace','lucky-break','victory','start','carry-confirm'])ui.click(action);
+  assert.equal(ui.read('JSON.stringify(state)'),before);
+  ui.click(undefined,undefined,undefined,undefined,99);assert.equal(ui.read('carryCandidate'),null);
+  const discarded=ui.read('state.sides[0].hand[0]');ui.click(undefined,undefined,undefined,undefined,discarded);ui.click('carry-confirm');
+  assert.equal(ui.read('state.phase'),'choose');assert.equal(ui.read('state.sides[0].hand.length'),5);assert.equal(ui.read('selected.length'),0);
+  assert.equal(ui.read('state.luckyBreak.remaining'),luckyBefore);assert.equal(ui.read('state.flexibleCarry.remaining'),1);
+  assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),3);
+  fixture(ui,true);assert.equal(ui.read('state.winner'),0);assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);
+  ui.click('victory');assert.equal(ui.read('run.phase'),'upgrade');assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);
+  claimFirst(ui);assert.equal(ui.read('run.upgrades["flexible-carry"]'),2);assert.equal(ui.read('state.flexibleCarry.remaining'),2);
+  ui.click('start');assert.equal(ui.read('state.flexibleCarry.remaining'),0);
+});
+
+test('Flexible Carry is absent after defeat and when normal refill needs fresh decks', () => {
+  const ui=setup();ui.click('start');vm.runInContext('run.upgrades={"flexible-carry":1};startEncounter()',ui.context);
+  fixture(ui,true);vm.runInContext('state.sides[1].out.push(...state.sides[1].pile.splice(2));render()',ui.context);
+  assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);const before=ui.read('JSON.stringify(state)');ui.click('flexible-carry');assert.equal(ui.read('JSON.stringify(state)'),before);
+  ui.click('next');assert.equal(ui.read('state.refreshes'),1);assert.equal(ui.read('state.flexibleCarry.remaining'),1);
+  vm.runInContext('state.wins=[0,1]',ui.context);fixture(ui,false);
+  assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);ui.click('loss');assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);
+});
+
+test('Read the Table reveals only committed ranks on five backs and preserves selection and boss decisions', () => {
+  for(const level of [1,2]){
+    const ui=setup();ui.click('start');assert.doesNotMatch(ui.html(),/data-action="read-table"/);
+    vm.runInContext(`run.upgrades={'read-the-table':${level},'quick-draw':2,'lucky-break':2};startEncounter()`,ui.context);
+    const bossBefore=ui.read('JSON.stringify({bossPlay,side:state.sides[1],commitment:state.bossCommitment})');
+    ui.click(undefined,ui.read('state.sides[0].hand[0]'));const selectedBefore=ui.read('JSON.stringify(selected)');
+    ui.click('read-table');
+    assert.equal(ui.read('state.readTheTable.reveals.length'),level);assert.equal(ui.read('state.readTheTable.remaining'),0);
+    assert.equal(ui.read('JSON.stringify(selected)'),selectedBefore);
+    assert.equal(ui.read('JSON.stringify({bossPlay,side:state.sides[1],commitment:state.bossCommitment})'),bossBefore);
+    const backs=ui.read('backs()');assert.equal((backs.match(/class="card back/g)||[]).length,5);
+    assert.equal((backs.match(/rank-known/g)||[]).length,level);
+    assert.equal((backs.match(/aria-label="Hidden card"/g)||[]).length,5-level);
+    assert.doesNotMatch(backs,/data-card|class="pip"|class="corner"|hearts|diamonds|clubs|spades/);
+    for(const info of ui.read('state.readTheTable.reveals'))assert.ok(backs.includes('Rank '+info.rank+'; suit hidden'));
+    const revealed=ui.read('JSON.stringify(state.readTheTable.reveals)');ui.click('read-table');assert.equal(ui.read('JSON.stringify(state.readTheTable.reveals)'),revealed);
+    ui.click('replace');assert.equal(ui.read('JSON.stringify(state.readTheTable.reveals)'),revealed);
+    ui.click(undefined,ui.read('state.sides[0].hand[0]'));ui.click('lucky-break');
+    ui.click(undefined,undefined,undefined,ui.read('state.luckyBreak.pending.candidates[0]'));ui.click('lucky-confirm');
+    assert.equal(ui.read('JSON.stringify(state.readTheTable.reveals)'),revealed);
+    [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');
+    assert.deepEqual([...ui.read('state.last.plays[1]')],[...ui.read('state.bossCommitment')]);
+    ui.click('next');assert.equal(ui.read('state.readTheTable.remaining'),0);assert.equal(ui.read('state.readTheTable.reveals.length'),0);
+    assert.match(ui.html(),/data-action="read-table"[^>]*disabled/);
+    vm.runInContext('state.wins=[0,0]',ui.context);fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');claimFirst(ui);
+    assert.equal(ui.read('run.upgrades["read-the-table"]')>=level,true);assert.equal(ui.read('state.readTheTable.remaining'),1);
+    ui.click('start');assert.equal(ui.read('state.readTheTable.remaining'),0);assert.doesNotMatch(ui.html(),/data-action="read-table"/);
+  }
+});
+
+test('Last Stand counter and small indicator activate next hand, not on the losing showdown', () => {
+  const ui=setup();ui.click('start');vm.runInContext('run.upgrades={"last-stand":1,"quick-draw":1};startEncounter()',ui.context);
+  assert.doesNotMatch(ui.html(),/Last Stand active/);fixture(ui,false);
+  assert.equal(ui.read('state.wins[1]'),1);assert.equal(ui.read('state.sides[0].discardAllowance'),2);assert.doesNotMatch(ui.html(),/Last Stand active/);
+  ui.click('next');assert.match(ui.html(),/Last Stand active/);assert.match(ui.html(),/aria-label="Discard; 4 remaining"/);
+  const cards=[...ui.read('state.sides[0].hand')];cards.forEach(c=>ui.click(undefined,c));const before=ui.read('JSON.stringify(state)');
+  ui.click('replace');assert.equal(ui.read('JSON.stringify(state)'),before);assert.match(ui.html(),/only discard 4 cards/);
+  ui.click(undefined,cards[4]);assert.match(ui.html(),/class="primary" data-action="replace"/);ui.click('replace');
+  assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),0);assert.match(ui.html(),/data-action="replace"[^>]*disabled/);
+  fixture(ui,true);ui.click('next');assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),4);assert.match(ui.html(),/Last Stand active/);
+  fixture(ui,true);assert.equal(ui.read('state.winner'),0);assert.doesNotMatch(ui.html(),/Last Stand active/);
+  ui.click('victory');claimFirst(ui);assert.equal(ui.read('run.upgrades["last-stand"]'),1);assert.equal(ui.read('state.lastStand.active'),false);
+  assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),1+(ui.read('run.upgrades["quick-draw"]')||0));
+  ui.click('start');assert.equal(ui.read('state.lastStand.owned'),false);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),1);
+});
+
+test('Last Stand waits for Flexible Carry confirmation and collection marks all upgrades implemented', () => {
+  const ui=setup();ui.click('start');vm.runInContext('run.upgrades=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));startEncounter()',ui.context);
+  fixture(ui,false);assert.equal(ui.read('state.lastStand.active'),false);ui.click('flexible-carry');
+  assert.equal(ui.read('state.lastStand.active'),false);assert.equal(ui.read('state.sides[0].discardAllowance'),3);
+  ui.click(undefined,undefined,undefined,undefined,ui.read('state.sides[0].hand[0]'));ui.click('carry-confirm');
+  assert.equal(ui.read('state.lastStand.active'),true);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),5);
+  const markup=ui.read('upgradeCollectionMarkup()');assert.equal((markup.match(/Enabled/g)||[]).length,6);assert.equal((markup.match(/Not yet implemented/g)||[]).length,0);
+  assert.equal(U.get('last-stand').maxLevel,1);assert.throws(()=>U.collect(ui.read('run.upgrades'),'last-stand'));
+});
+
+test('draw pile hides information without ownership and rank-only markup cannot leak a suit', () => {
+  const ui=setup();ui.click('start');
+  for(const level of [0,1]) {
+    const variants=[];
+    for(const card of [20,21,22,23]) {
+      variants.push(ui.read(`state.peekAheadLevel=${level};state.sides[0].pile=[${card}];playerDrawPile()`));
+    }
+    assert.ok(variants.every(markup=>markup===variants[0]));
+    assert.doesNotMatch(variants[0],/red|peek-suit|hearts|diamonds|clubs|spades|[\u2660\u2665\u2663\u2666]/);
+    assert.match(variants[0],level ? /Next draw: A; suit hidden/ : /next card hidden/);
+    if(!level)assert.doesNotMatch(variants[0],/peek-rank/);
+  }
+  const markup=ui.read('state.peekAheadLevel=2;state.sides[0].pile=[21];playerDrawPile()');
+  assert.match(markup,/Next draw: A of hearts/);assert.match(markup,/mini-pile red/);assert.match(markup,/peek-suit/);
+  assert.match(ui.read('state.sides[0].pile=[];playerDrawPile()'),/Your draw pile is empty/);
+  assert.doesNotMatch(ui.read('playerDrawPile()'),/peek-rank|peek-suit/);
+});
+
+test('Peek Ahead renders current information during both draw abilities, persists across bosses and resets on new runs', () => {
+  const ui=setup();ui.click('start');
+  ui.read('run.upgrades={"peek-ahead":2,"lucky-break":2,"flexible-carry":2};startEncounter()');
+  function displayed() {
+    const label=ui.read('playerDrawPile()');assert.ok(ui.html().includes(label));
+    const next=ui.read('state.sides[0].pile[0]');
+    assert.ok(label.includes(G.ranks[Math.floor(next/4)]));
+    assert.ok(label.includes(G.suits[G.suit(next)]));
+  }
+  displayed();ui.click(undefined,ui.read('state.sides[0].hand[0]'));ui.click('lucky-break');displayed();
+  ui.click(undefined,undefined,undefined,ui.read('state.luckyBreak.pending.candidates[0]'));ui.click('lucky-confirm');displayed();
+  fixture(ui,true);ui.click('flexible-carry');displayed();
+  ui.click(undefined,undefined,undefined,undefined,ui.read('state.sides[0].hand[0]'));ui.click('carry-confirm');displayed();
+  fixture(ui,true);ui.click('victory');claimFirst(ui);displayed();assert.equal(ui.read('state.peekAheadLevel'),2);
+  ui.click('start');assert.equal(ui.read('state.peekAheadLevel'),0);assert.match(ui.read('playerDrawPile()'),/next card hidden/);
 });
