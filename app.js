@@ -2,7 +2,7 @@
 const G = DMH;
 const U = DMHUpgrades;
 const failedUpgradeArtwork = new Set();
-const newRun = () => ({ upgrades: {}, phase: 'intro', offers: [], selectedUpgrade: null });
+const newRun = () => ({ upgrades: {}, phase: 'intro', offers: [], selectedUpgrade: null, lineup: G.createBossLineup(Math.random), endlessRoster: [], endlessBoss: null });
 let run = newRun();
 const app = document.getElementById('app');
 const handResultOverlay = document.getElementById('hand-result-overlay');
@@ -41,7 +41,8 @@ handResultOverlay.addEventListener('keydown', event => {
   }
 });
 let state, bossIndex = 0, bossPlay, selected = [], discardWarning = false, notice = '', log = [], endless = false, luckyCandidate = null, carryCandidate = null;
-const boss = () => G.bosses[Math.min(bossIndex, 4)];
+const boss = () => bossIndex < 5 ? run.lineup[bossIndex] : run.endlessBoss;
+const bossPolicy = () => G.difficulties[Math.min(bossIndex, 4)];
 function cardMarkup(c, interactive = false, selection = selected, dataKey = 'card') {
   const red = G.suit(c) === 1 || G.suit(c) === 3;
   const inside = `<span>${G.ranks[Math.floor(c / 4)]}</span><span class="pip" aria-hidden="true">${G.suits[G.suit(c)]}</span><span class="corner" aria-hidden="true">${G.suits[G.suit(c)]}</span>`;
@@ -56,7 +57,7 @@ function backs() {
   }).join('');
 }
 function commitBossDecision() {
-  bossPlay = G.commitBossPlay(state, G.aiTurn(state, 1, boss(), Math.random));
+  bossPlay = G.commitBossPlay(state, G.aiTurn(state, 1, bossPolicy(), Math.random));
 }
 function intro() {
   app.className = 'home-screen';
@@ -93,9 +94,8 @@ function pathMarkup() {
   return endless ? `<span class="encounter-progress endless-progress">ENDLESS &middot; ENCOUNTER ${bossIndex + 1}</span>` : `<div class="encounter-progress" role="img" aria-label="Boss ${bossIndex + 1} of 5"><span>${String(bossIndex + 1).padStart(2, '0')} <span class="progress-total">/ 05</span></span><span class="progress-track" aria-hidden="true"><span style="width:${(bossIndex + 1) * 20}%"></span></span></div>`;
 }
 function bossArtwork(defeated = false) {
-  // Derive the PNG asset name from the existing boss identity.
-  const filename = boss().name.replace(/^The /, '').toLowerCase();
-  return `<div class="boss-artwork"><img class="boss-portrait" src="assets/images/bosses/${filename}.png" width="1060" height="1484" alt="${boss().name}, Western wanted poster" loading="eager" decoding="async"><h2 class="boss-fallback" hidden>${boss().name}</h2>${defeated ? `<svg class="defeat-mark" viewBox="0 0 100 140" aria-hidden="true" focusable="false"><path class="paint-stroke paint-first" d="M12 12 L18 14 L29 32 L31 32 L49 59 L50 63 L70 91 L73 92 L89 119 L87 127 L81 122 L66 102 L65 98 L44 71 L41 70 L25 45 L22 44 L10 22 L11 18 Z"/><path class="paint-stroke paint-second" d="M87 13 L92 19 L79 39 L80 41 L60 66 L58 72 L40 96 L39 100 L18 126 L11 129 L9 122 L24 101 L28 98 L45 74 L45 70 L63 46 L65 40 L80 20 Z"/></svg>` : ''}</div>`;
+  const artwork = boss().artwork;
+  return `<div class="boss-artwork"><img class="boss-portrait" src="${artwork.src}" width="${artwork.width}" height="${artwork.height}" alt="${boss().name}, Western wanted poster" loading="eager" decoding="async"><h2 class="boss-fallback" hidden>${boss().name}</h2>${defeated ? `<svg class="defeat-mark" viewBox="0 0 100 140" aria-hidden="true" focusable="false"><path class="paint-stroke paint-first" d="M12 12 L18 14 L29 32 L31 32 L49 59 L50 63 L70 91 L73 92 L89 119 L87 127 L81 122 L66 102 L65 98 L44 71 L41 70 L25 45 L22 44 L10 22 L11 18 Z"/><path class="paint-stroke paint-second" d="M87 13 L92 19 L79 39 L80 41 L60 66 L58 72 L40 96 L39 100 L18 126 L11 129 L9 122 L24 101 L28 98 L45 74 L45 70 L63 46 L65 40 L80 20 Z"/></svg>` : ''}</div>`;
 }
 function scoreChips(sideIndex) {
   const spent = state.wins[1 - sideIndex];
@@ -201,7 +201,13 @@ function activateLuckyBreak() {
 // Rewards are a run-level phase; enabled passives enter the next encounter through engine.js.
 function advanceAfterReward() {
   run.offers = []; run.selectedUpgrade = null;
-  bossIndex++; showBossIntroduction();
+  const previousId = boss().id;
+  bossIndex++;
+  if (bossIndex >= 5) {
+    if (!run.endlessRoster.length) run.endlessRoster = G.bossCycle(previousId, Math.random);
+    run.endlessBoss = run.endlessRoster.shift();
+  }
+  showBossIntroduction();
 }
 function beginReward() {
   const deferredFinalReward = run.phase === 'complete' && bossIndex === 4 && endless;
@@ -254,7 +260,7 @@ function ending(won) {
   if (won) { renderMilestone('complete'); return; }
   app.className = '';
   document.body.classList.remove('playing');
-  app.innerHTML = `<section class="ending"><p class="eyebrow">${won ? 'THE FIRST FIVE · COMPLETE' : 'THE ROAD ENDS HERE'}</p><div class="symbol" aria-hidden="true">${won ? '♔' : '♠'}</div><h1>${won ? 'You saw daylight.' : 'The house remembers.'}</h1><p>${won ? 'Five bosses beaten. Walk away a winner, or keep playing against the Undertaker in endless mode.' : `${bossIndex} ${bossIndex===1?'boss':'bosses'} defeated. ${boss().name} took this encounter ${state.wins[1]}–${state.wins[0]}. A new run means a fresh start.`}</p><div class="actions">${won ? '<button class="secondary" data-action="endless">Play endless</button>' : ''}<button class="primary" data-action="start">${won ? 'New run' : 'Try again'}</button></div></section>`;
+  app.innerHTML = `<section class="ending"><p class="eyebrow">${won ? 'THE FIRST FIVE · COMPLETE' : 'THE ROAD ENDS HERE'}</p><div class="symbol" aria-hidden="true">${won ? '♔' : '♠'}</div><h1>${won ? 'You saw daylight.' : 'The house remembers.'}</h1><p>${won ? 'Five bosses beaten. Walk away a winner, or keep facing new opponents in endless mode.' : `${bossIndex} ${bossIndex===1?'boss':'bosses'} defeated. ${boss().name} took this encounter ${state.wins[1]}–${state.wins[0]}. A new run means a fresh start.`}</p><div class="actions">${won ? '<button class="secondary" data-action="endless">Play endless</button>' : ''}<button class="primary" data-action="start">${won ? 'New run' : 'Try again'}</button></div></section>`;
   const heading = app.querySelector('.ending h1');
   if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus(); }
 }
@@ -269,7 +275,7 @@ function renderMilestone(kind) {
     <h1 id="milestone-title" tabindex="-1">${title}</h1>
     ${kind === 'boss' ? '' : `<p class="milestone-subtitle">${lost ? 'Defeated by ' : ''}${boss().name}${complete ? ' defeated' : ''}</p>`}
     ${bossArtwork(kind === 'boss')}
-    ${complete ? '<p class="milestone-message">Five bosses beaten. Daylight is yours.<br>Keep playing against the Undertaker in endless mode, or start a new run.</p>' : ''}
+    ${complete ? '<p class="milestone-message">Five bosses beaten. Daylight is yours.<br>Keep facing new opponents in endless mode, or start a new run.</p>' : ''}
     <div class="actions">${complete ? '<button class="secondary" data-action="endless">Endless Mode</button><button class="primary" data-action="start">New Run</button>' : `<button class="primary" data-action="${lost ? 'loss' : 'victory'}">${lost ? 'Run Summary' : U.eligible(run.upgrades).length ? 'Choose Upgrade' : 'Continue'}</button>`}</div>
   </section>`;
   const heading = app.querySelector('#milestone-title');
@@ -367,7 +373,7 @@ app.addEventListener('click', event => {
       if (run.phase !== 'table' || selected.length !== 3 || state.phase !== 'choose') return;
       handResultAnnouncement.textContent = '';
       const result = G.reveal(state, [[...selected], bossPlay]);
-      log.unshift(`Hand ${state.handNumber}: you ${result.plays[0].map(G.label).join(' ')} · boss ${result.plays[1].map(G.label).join(' ')} · ${result.result > 0 ? 'you win' : result.result < 0 ? 'boss wins' : 'tie'}`);
+      log.unshift(`Hand ${state.handNumber}: you ${result.plays[0].map(G.label).join(' ')} · ${boss().name} ${result.plays[1].map(G.label).join(' ')} · ${result.result > 0 ? 'you win' : result.result < 0 ? 'boss wins' : 'tie'}`);
       notice = ''; discardWarning = false;
       if (state.winner === 0 && bossIndex === 4 && !endless) ending(true);
       else {

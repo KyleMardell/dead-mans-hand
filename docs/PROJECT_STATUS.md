@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-The playable mobile web roguelite now has five bosses, all six functional run upgrades and a complete introduction/reward/result flow. It remains buildless HTML/CSS/JavaScript, using Node 24 for local tools and no external runtime dependencies. The owner has reported completing a full five-boss run; that is human playtesting evidence, not a measured balance study or confirmation of a particular device.
+The playable mobile web roguelite now has fifteen boss identities across five initial encounters, all six functional run upgrades and a complete introduction/reward/result flow. It remains buildless HTML/CSS/JavaScript, using Node 24 for local tools and no external runtime dependencies. The owner has reported completing a full five-boss run; that is human playtesting evidence, not a measured balance study or confirmation of a particular device.
 
 The owner has playtested and approved the 28-card, first-to-three encounter format as the official game rules. Each side independently shuffles 8 through Ace in four suits. Exact ties award no point. Three chips per side track the remaining hand losses before defeat. Last Stand starts at the next-hand boundary when the boss is one win from victory (two hand wins), adding two discards to the normal/Quick Draw allowance.
 
@@ -15,14 +15,22 @@ Implemented presentation and interaction:
 - Accessible How to Play and Upgrades dialogs. The guide includes miniature ranking examples and current rule explanations.
 - Dismissible hand result overlays lasting about 1.4 seconds; they preserve showdown underneath and never advance gameplay automatically.
 - Dedicated Boss Defeated, Run Over and Run Complete screens. Boss Defeated adds a decorative painted red X; other screens do not. Transition buttons work during entrance animations, and reduced motion removes the animations.
-- A wanted-poster introduction before every encounter, including the first Drifter and every Endless encounter. No deck or boss commitment is created before Face the Boss.
+- A wanted-poster introduction before every encounter, including the first selected opponent and every Endless encounter. No deck or boss commitment is created before Face the Boss.
 - A simplified home screen with the gold tagline beneath the title and its footer hidden.
 
 ## Upgrades and progression
 
 Quick Draw, Lucky Break, Flexible Carry, Read the Table, Last Stand and Peek Ahead are implemented. Last Stand is unique with one level; the other five upgrades have two levels. Levels, eligibility and artwork metadata come from `upgrades.js`; gameplay effects and accounting are in `engine.js`, with UI and run transitions in `app.js`. See GAME_DESIGN.md for exact effects and reset boundaries.
 
-Bosses 1-4 lead from Boss Defeated through reward selection to the next introduction. One of up to three eligible offers is explicitly claimed. Run defeat leads to Run Over, then the existing summary/restart flow. Completing boss five immediately shows Run Complete; its reward is generated only after choosing Endless. New Run abandons that reward and clears the collection. Endless retains upgrades and Undertaker difficulty, offers rewards while eligible and always introduces the next encounter, even with an exhausted pool.
+Bosses 1-4 lead from Boss Defeated through reward selection to the next introduction. One of up to three eligible offers is explicitly claimed. Run defeat leads to Run Over, then the existing summary/restart flow. Completing boss five immediately shows Run Complete; its reward is generated only after choosing Endless. New Run abandons that reward and clears the collection. Endless retains upgrades and encounter-five difficulty, offers rewards while eligible and always introduces the next encounter, even with an exhausted pool.
+
+## Boss roster and selection
+
+Fifteen supplied PNG posters are centrally mapped in `engine.js`, preserving exact filenames and dimensions. Character identity is separate from the five existing encounter-position AI policies; the 28-card, first-to-three rules and six upgrade effects are unchanged.
+
+A new run selects four distinct characters from the twelve regular bosses, then one of The Undertaker, The Widow or The Preacher for encounter five. Those three cannot appear earlier in the initial run. The full lineup stays hidden; the current character is revealed at the introduction and stays consistent through the encounter.
+
+Endless uses shuffled cycles of all fifteen characters, with no consecutive duplicate across the initial final/Endless boundary or between cycles. Every Endless encounter uses the existing fifth policy. New Run clears the cycle and collection and creates a new initial lineup. The fifth reward remains deferred until choosing Endless; rewards still occur once per defeated boss.
 
 ## Validation record and current confidence
 
@@ -41,6 +49,8 @@ These records apply to the versions checked at the time. They do not establish p
 **Documentation refresh, 2026-11-07:** source and documentation review only. No automated tests, browser checks or simulations were run for this documentation task.
 
 **Rules approval documentation update, 2026-11-07:** documentation consistency review only, relying on the recent 81 passing checks and owner playtesting. No automated tests, browser checks or simulations were rerun.
+
+**Fifteen-boss roster checks:** 47 focused roster/UI tests passed, covering exact artwork mappings, seeded lineup constraints, unchanged policies selected by encounter position, identity consistency, new-run reset, rewards/upgrades and multiple Endless cycles without consecutive duplicates. All fifteen PNGs returned HTTP 200 as image/png and decoded at their mapped dimensions. Focused 390 x 844 checks covered The Widow and the three posters with differing dimensions, plus Snake Oil Man gameplay and a missing-image text fallback. Controls stayed visible with no horizontal overflow. No full automated suite or balance simulations were rerun for this feature.
 
 ### Test helper convention
 

@@ -20,15 +20,21 @@ The 28-card, first-to-three format is approved following owner playtesting. `eng
 
 ## Boss progression and decision policies
 
-| Boss | Strongest-three selection | Discard policy |
-|---|---:|---|
-| The Drifter | 15% of hands; otherwise random | None |
-| The Gambler | 45%; otherwise random | Lowest card |
-| The Deputy | 75%; otherwise random | None |
-| The Sheriff | 100% | None |
-| The Undertaker | 100% | Informed expected value |
+Boss identities and artwork are registered in `engine.js` as `bosses`; the five unchanged AI policies are separately registered as `difficulties`. Encounter position selects the policy, never character identity.
 
-These are implemented skill settings, not locked balance targets. Bosses may elect not to use their allowance. Endless continues with the Undertaker's artwork and decision policy, without adding new difficulty tiers.
+| Encounter | Strongest-three selection | Discard policy |
+|---|---:|---|
+| 1 (former Drifter policy) | 15% of hands; otherwise random | None |
+| 2 (former Gambler policy) | 45%; otherwise random | Lowest card |
+| 3 (former Deputy policy) | 75%; otherwise random | None |
+| 4 (former Sheriff policy) | 100% | None |
+| 5 and every Endless encounter (former Undertaker policy) | 100% | Informed expected value |
+
+At each New Run, choose four distinct regular characters and one reserved final character. The twelve regular bosses are The Drifter, The Gambler, The Deputy, The Sheriff, The Saloon Queen, The Bounty Hunter, The Outlaw, The Snake Oil Man, The Card Shark, The Baron, The Bandit Queen and The Ghost. The Undertaker, The Widow and The Preacher are reserved for encounter five during the initial run. No initial-run character repeats.
+
+Keep the chosen lineup fixed and reveal only the current opponent at their introduction. Identity, subtitle and poster stay consistent through gameplay, history and result/reward transitions. No character has a unique ability or privileged card knowledge; flavour subtitles do not change mechanics.
+
+Endless shuffles all fifteen characters into a roster cycle, uses each once, then reshuffles. Prevent consecutive repeats both after the initial final boss and between cycles. Final characters participate normally. Endless always uses encounter-five difficulty and preserves existing rewards, upgrade limits and progression. New Run clears the Endless cycle and generates a fresh initial lineup.
 
 ## Implemented upgrades and rewards
 
@@ -92,7 +98,7 @@ Introductions remain until Face the Boss is pressed. Only then are decks created
 
 ## Artwork, presentation and accessibility conventions
 
-- Boss wanted posters are PNGs in `assets/images/bosses/`, selected from existing boss identity. Illustrated upgrade PNGs are in `assets/images/upgrades/`; preserve their exact filenames and metadata in `upgrades.js`.
+- Boss wanted posters are PNGs in `assets/images/bosses/`, selected from central boss artwork metadata, including exact filename case, spaces and intrinsic dimensions. Illustrated upgrade PNGs are in `assets/images/upgrades/`; preserve their exact filenames and metadata in `upgrades.js`.
 - Do not modify supplied images. Preserve aspect ratios, show the whole image without cropping, and reserve image space while loading. Boss failures reveal a text name; upgrade failures reveal a readable definition-based text card. Accessible names/descriptions identify bosses and offered upgrade levels/effects.
 - The reward screen intentionally contains only navigation, centred Claim your reward, illustrations and Claim Upgrade. Visible level badges and extra effect captions are removed; offered levels/effects remain accessible. Cards stack on mobile and scale to available viewport height, with natural scrolling on unusually small screens rather than clipping.
 - Artwork may contain base-level wording such as "X1 per round." It does not override per-boss use limits or improved-level effects defined by code. The Upgrades dialog provides current owned levels and descriptions.

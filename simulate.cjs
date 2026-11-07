@@ -17,8 +17,8 @@ function compare(a, b, offset = 0) {
 const pairs = [['greedy','greedy'],['greedy','random'],['conserve','greedy'],['informed','greedy'],['low','greedy'],['informed','low'],['planner','informed']];
 const results = {};
 for (const [a,b] of pairs) { results[`${a} vs ${b}`] = compare(G.policies[a], G.policies[b]); console.log(a, 'vs', b, JSON.stringify(results[`${a} vs ${b}`])); }
-const bosses = G.bosses.map((b,i) => ({ name:b.name, ...compare(G.policies.informed, b, 100000 + i*10000) }));
+const bosses = G.difficulties.map((b,i) => ({ name:`Encounter ${i+1}`, ...compare(G.policies.informed, b, 100000 + i*10000) }));
 const completionEstimate = 100*bosses.reduce((p,b) => p*b.playerWinPct/100, 1);
-const result = { seed:20261105, methodology:'Alternating seats; independent 24-card decks; 95% Wilson intervals; informed greedy player for bosses; conservation is a one-step heuristic, not optimal play.', matchups: results, bosses, independentRunCompletionEstimatePct: +completionEstimate.toFixed(2) };
+const result = { seed:20261105, methodology:`Alternating seats; independent ${G.deck().length}-card decks; 95% Wilson intervals; informed greedy player for bosses; conservation is a one-step heuristic, not optimal play. First to ${G.rules.winsRequired} wins.`, matchups: results, bosses, independentRunCompletionEstimatePct: +completionEstimate.toFixed(2) };
 fs.writeFileSync(path.join(__dirname, 'simulation-results.json'), JSON.stringify(result,null,2)+'\n');
 console.log('Bosses', JSON.stringify(bosses)); console.log('Estimated five-boss completion',completionEstimate.toFixed(2)+'%');

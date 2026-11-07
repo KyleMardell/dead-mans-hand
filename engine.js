@@ -217,13 +217,45 @@
     conserve: { style: 'conserve', discard: 'none' },
     planner: { style: 'conserve', discard: 'expected' }
   };
-  const bosses = [
-    { name: 'The Drifter', title: 'Learning the ropes', style: 'greedy', skill: 0.15, discard: 'none' },
-    { name: 'The Gambler', title: 'Trusts a hunch', style: 'greedy', skill: 0.45, discard: 'low' },
-    { name: 'The Deputy', title: 'Knows a good hand', style: 'greedy', skill: 0.75, discard: 'none' },
-    { name: 'The Sheriff', title: 'Chooses with care', style: 'greedy', skill: 1, discard: 'none' },
-    { name: 'The Undertaker', title: 'Makes every draw count', style: 'greedy', skill: 1, discard: 'expected' }
-  ];
+  // Character identity never supplies an AI policy. Encounter position selects difficulty.
+  const difficulties = Object.freeze([
+    { style: 'greedy', skill: 0.15, discard: 'none' },
+    { style: 'greedy', skill: 0.45, discard: 'low' },
+    { style: 'greedy', skill: 0.75, discard: 'none' },
+    { style: 'greedy', skill: 1, discard: 'none' },
+    { style: 'greedy', skill: 1, discard: 'expected' }
+  ].map(Object.freeze));
+  const bosses = Object.freeze([
+    ['drifter', 'The Drifter', 'Learning the ropes', 'drifter.png'],
+    ['gambler', 'The Gambler', 'Trusts a hunch', 'gambler.png'],
+    ['deputy', 'The Deputy', 'Knows a good hand', 'deputy.png'],
+    ['sheriff', 'The Sheriff', 'Chooses with care', 'sheriff.png'],
+    ['undertaker', 'The Undertaker', 'Makes every draw count', 'undertaker.png', true],
+    ['widow', 'The Widow', 'She never loses twice', 'Widow.png', true],
+    ['preacher', 'The Preacher', 'Confess your sins', 'Preacher.png', true],
+    ['saloon-queen', 'The Saloon Queen', 'The house always wins', 'Saloon Queen.png'],
+    ['bounty-hunter', 'The Bounty Hunter', 'Your luck has a price', 'Bounty Hunter.png'],
+    ['outlaw', 'The Outlaw', 'Rules are made to break', 'Outlaw.png'],
+    ['snake-oil-man', 'The Snake Oil Man', "A deal you can't refuse", 'Snake Oil Man.png', false, 1122, 1402],
+    ['card-shark', 'The Card Shark', "She's already seen your hand", 'Card Shark.png'],
+    ['baron', 'The Baron', 'Everything has a price', 'Baron.png', false, 1055, 1491],
+    ['bandit-queen', 'The Bandit Queen', 'All bets are off', 'Bandit Queen.png', false, 1082, 1453],
+    ['ghost', 'The Ghost', 'You never saw him coming', 'Ghost.png']
+  ].map(([id, name, title, filename, final = false, width = 1060, height = 1484]) =>
+    Object.freeze({ id, name, title, final, artwork: Object.freeze({ src: `assets/images/bosses/${filename}`, width, height }) })));
+  function createBossLineup(random = Math.random) {
+    const regular = shuffle(bosses.filter(b => !b.final), random).slice(0, 4);
+    const finals = bosses.filter(b => b.final);
+    return [...regular, finals[Math.floor(random() * finals.length)]];
+  }
+  function bossCycle(previousId, random = Math.random) {
+    const cycle = shuffle(bosses, random);
+    if (cycle[0].id === previousId) {
+      const index = 1 + Math.floor(random() * (cycle.length - 1));
+      [cycle[0], cycle[index]] = [cycle[index], cycle[0]];
+    }
+    return cycle;
+  }
   function simulate(a, b, seed) {
     const random = rng(seed), state = newEncounter(random);
     for (let i = 0; i < 1000; i++) {
@@ -233,7 +265,7 @@
     }
     throw Error('Simulation did not terminate within 1000 hands.');
   }
-  const api = { rules, ranks, suits, names, deck, rank, suit, label, rng, shuffle, combinations, evaluate, score, strongest, prepareModel, choose, newEncounter, discard, remainingDiscards, peekAhead, activateLuckyBreak, resolveLuckyBreak, canFlexibleCarry, activateFlexibleCarry, resolveFlexibleCarry, commitBossPlay, readTheTable, discardChoice, aiTurn, reveal, nextHand, policies, bosses, simulate };
+  const api = { rules, ranks, suits, names, deck, rank, suit, label, rng, shuffle, combinations, evaluate, score, strongest, prepareModel, choose, newEncounter, discard, remainingDiscards, peekAhead, activateLuckyBreak, resolveLuckyBreak, canFlexibleCarry, activateFlexibleCarry, resolveFlexibleCarry, commitBossPlay, readTheTable, discardChoice, aiTurn, reveal, nextHand, policies, difficulties, bosses, createBossLineup, bossCycle, simulate };
   if (typeof module !== 'undefined') module.exports = api;
   else root.DMH = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
