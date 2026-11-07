@@ -2,6 +2,18 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const U = require('../upgrades.js');
 
+test('each upgrade maps to an existing PNG with its exact intrinsic dimensions', () => {
+  const fs=require('node:fs'),path=require('node:path');
+  const sources=new Set();
+  for(const d of U.definitions){
+    const data=fs.readFileSync(path.join(__dirname,'..',d.artwork.src));
+    assert.equal(data.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+    assert.equal(data.readUInt32BE(16),d.artwork.width);assert.equal(data.readUInt32BE(20),d.artwork.height);
+    assert.ok(d.artwork.width>d.artwork.height);assert.ok(Object.isFrozen(d.artwork));sources.add(d.artwork.src);
+  }
+  assert.equal(sources.size,6);
+});
+
 test('six central definitions expose every agreed level and unique Last Stand', () => {
   assert.equal(U.definitions.length,6);
   assert.equal(new Set(U.definitions.map(d=>d.id)).size,6);

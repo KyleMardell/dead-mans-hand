@@ -11,8 +11,10 @@
   <script defer src="app.js"></script>
 </head>
 <body>
-  <header class="masthead"><a href="./index.html" aria-label="Dead Man’s Hand home">DM<span>♠</span>H</a><span>THE FIRST FIVE <i>•</i> PLAYTEST 01</span><div class="masthead-tools"><button id="upgrades-toggle" class="quiet" aria-haspopup="dialog" aria-expanded="false" aria-controls="upgrades-dialog" hidden>Upgrades</button><button id="rules-toggle" class="quiet" aria-haspopup="dialog" aria-expanded="false" aria-controls="rules">How to play</button></div></header>
+  <header id="site-navigation" class="masthead"><a href="./index.html" aria-label="Dead Man’s Hand home">DM<span>♠</span>H</a><span>THE FIRST FIVE <i>•</i> PLAYTEST 01</span><div class="masthead-tools"><button id="upgrades-toggle" class="quiet" aria-haspopup="dialog" aria-expanded="false" aria-controls="upgrades-dialog" hidden>Upgrades</button><button id="rules-toggle" class="quiet" aria-haspopup="dialog" aria-expanded="false" aria-controls="rules">How to play</button></div></header>
   <main id="app"></main>
+  <button id="hand-result-overlay" class="result-overlay" type="button" hidden aria-label="Dismiss hand result"><span id="hand-result-message" class="result-overlay-message" aria-hidden="true"></span></button>
+  <p id="hand-result-announcement" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
   <dialog id="rules" class="rules" aria-labelledby="rules-title">
     <div class="rules-heading rules-titlebar"><div><h2 id="rules-title">Dead Man&rsquo;s Hand</h2><p class="rules-subtitle">Three Card Poker Roguelite</p></div><button id="rules-close" class="quiet" autofocus aria-label="Close how to play">Close &times;</button></div>
     <div class="rules-content" tabindex="0" role="region" aria-label="Game instructions">

@@ -7,17 +7,22 @@ const G = require('../engine.js');
 const U = require('../upgrades.js');
 // Exercise real UI event handlers without a browser dependency. Engine fixtures
 // control outcomes so every run transition can be reached deterministically.
-function setup(upgradeSystem = U) {
-  const elements = new Map();
+function setup(upgradeSystem = U, {autoFaceBoss = true} = {}) {
+  const elements = new Map(), timers = new Map(); let timerId = 0;
   const document = { getElementById:id=>elements.get(id), body:{classList:{add(){},remove(){}}}, activeElement:null };
-  for (const id of ['app','rules','rules-toggle','rules-close','upgrades-toggle','upgrades-close','upgrades-dialog','upgrades-content']) elements.set(id,{ innerHTML:'', open:false, attributes:{}, handlers:{}, addEventListener(type,fn){this.handlers[type]=fn;}, querySelector(){return null;}, setAttribute(key,value){this.attributes[key]=value;}, focus(){document.activeElement=this;}, showModal(){this.open=true;}, close(){this.open=false;this.handlers.close();} });
-  const context = vm.createContext({ DMH:G, DMHUpgrades:upgradeSystem, document, console });
+  for (const id of ['site-navigation','hand-result-overlay','hand-result-message','hand-result-announcement','app','rules','rules-toggle','rules-close','upgrades-toggle','upgrades-close','upgrades-dialog','upgrades-content']) elements.set(id,{ innerHTML:'', hidden:id==='hand-result-overlay', dataset:{}, open:false, attributes:{}, handlers:{}, addEventListener(type,fn){this.handlers[type]=fn;}, querySelector(){return null;}, setAttribute(key,value){this.attributes[key]=value;}, focus(){document.activeElement=this;}, showModal(){this.open=true;}, close(){this.open=false;this.handlers.close();} });
+  const context = vm.createContext({ DMH:G, DMHUpgrades:upgradeSystem, document, console, setTimeout(fn,delay){const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout(id){timers.delete(id);} });
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),context);
-  const click = (action, card, upgrade, candidate, carry) => elements.get('app').handlers.click({target:{closest:()=>({disabled:false,dataset: carry !== undefined ? {carry:String(carry)} : candidate !== undefined ? {candidate:String(candidate)} : card === undefined ? {action,upgrade} : {card:String(card)}})}});
+  const click = (action, card, upgrade, candidate, carry) => {
+    elements.get('app').handlers.click({preventDefault(){},stopPropagation(){},target:{closest:()=>({disabled:false,dataset: carry !== undefined ? {carry:String(carry)} : candidate !== undefined ? {candidate:String(candidate)} : card === undefined ? {action,upgrade} : {card:String(card)}})}});
+    // Existing table-mechanics fixtures enter the encounter automatically;
+    // introduction-flow tests opt out and exercise the real intermediate screen.
+    if(autoFaceBoss && read('run.phase')==='boss-intro')click('face-boss');
+  };
   const read = expression => vm.runInContext(expression, context);
-  return { context, click, read, elements, document, html:()=>elements.get('app').innerHTML };
+  return { context, click, read, elements, document, timers, html:()=>elements.get('app').innerHTML };
 }
-function fixture(ui, win) {
+function fixture(ui, win, dismiss = true) {
   vm.runInContext(`{
     const good = [20,21,22,0,1], bad = [0,5,10,11,12];
     const hands = ${win ? '[good,bad]' : '[bad,good]'};
@@ -26,12 +31,130 @@ function fixture(ui, win) {
   }`,ui.context);
   const cards = ui.read('state.sides[0].hand.slice(0,3)');
   cards.forEach(c=>ui.click(undefined,c)); ui.click('play');
+  if(dismiss)ui.read('dismissHandResult()');
 }
 function claimFirst(ui) {
   if(ui.read('run.phase') !== 'upgrade') return;
   ui.click('select-upgrade',undefined,ui.read('run.offers[0]'));
   ui.click('claim-upgrade');
 }
+
+test('boss introduction starts at Drifter and blocks all gameplay until a single Face activation', () => {
+  const ui=setup(U,{autoFaceBoss:false});ui.click('start');
+  assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('state'),null);assert.equal(ui.read('bossPlay'),null);
+  assert.match(ui.html(),/assets\/images\/bosses\/drifter.png/);assert.match(ui.html(),/Learning the ropes/);
+  assert.match(ui.html(),/01 <span class="progress-total">\/ 05/);assert.match(ui.html(),/>Face the Boss<\/button>/);
+  assert.match(ui.html(),/class="visually-hidden"[^>]*>The Drifter<\/h1>/);
+  assert.doesNotMatch(ui.html(),/data-card=|data-action="play"|data-action="replace"/);assert.equal(ui.timers.size,0);
+  const before=ui.read('JSON.stringify({run,state,bossIndex,endless})');
+  for(const action of ['start','play','replace','next','victory','loss','endless','claim-upgrade','lucky-break','flexible-carry','read-table'])ui.click(action);
+  ui.click(undefined,0);assert.equal(ui.read('JSON.stringify({run,state,bossIndex,endless})'),before);
+  ui.click('face-boss');assert.equal(ui.read('run.phase'),'table');assert.equal(ui.read('state.phase'),'choose');
+  assert.equal(ui.read('state.handNumber'),1);assert.equal(ui.read('state.sides[0].hand.length'),5);
+  assert.equal(ui.read('state.bossCommitment.length'),3);assert.equal(ui.read('bossIndex'),0);
+  const started=ui.read('JSON.stringify({run,state,bossPlay,bossIndex})');ui.click('face-boss');
+  assert.equal(ui.read('JSON.stringify({run,state,bossPlay,bossIndex})'),started);
+});
+
+test('boss introduction follows each of the first four rewards and preserves upgrades until Face', () => {
+  const ui=setup(U,{autoFaceBoss:false});ui.click('start');ui.click('face-boss');
+  for(let b=0;b<4;b++){
+    fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+    assert.equal(ui.read('run.phase'),'upgrade');claimFirst(ui);
+    assert.equal(ui.read('bossIndex'),b+1);assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('state'),null);
+    assert.ok(ui.html().includes(G.bosses[b+1].title));
+    assert.ok(ui.html().includes(G.bosses[b+1].name));
+    const upgrades=ui.read('JSON.stringify(run.upgrades)');
+    ui.click('claim-upgrade');ui.click('victory');assert.equal(ui.read('bossIndex'),b+1);
+    ui.click('face-boss');assert.equal(ui.read('JSON.stringify(run.upgrades)'),upgrades);
+    assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),1+(ui.read('run.upgrades["quick-draw"]')||0));
+  }
+});
+
+test('boss introduction follows the deferred final reward without changing Undertaker difficulty', () => {
+  let calls=0;const ui=setup({...U,offer(...args){calls++;return U.offer(...args);}},{autoFaceBoss:false});
+  ui.click('start');ui.read('bossIndex=4;showBossIntroduction()');ui.click('face-boss');
+  fixture(ui,true);ui.click('next');fixture(ui,true);assert.equal(ui.read('run.phase'),'complete');assert.equal(calls,0);
+  ui.click('endless');assert.equal(ui.read('run.phase'),'upgrade');assert.equal(calls,1);claimFirst(ui);
+  assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('state'),null);assert.equal(ui.read('bossIndex'),5);
+  assert.match(ui.html(),/ENDLESS &middot; ENCOUNTER 6/);assert.doesNotMatch(ui.html(),/06.*\/ 05/);
+  assert.match(ui.html(),/assets\/images\/bosses\/undertaker.png/);assert.equal(ui.read('boss()'),G.bosses[4]);
+  const before=ui.read('JSON.stringify({run,bossIndex})');ui.click('endless');ui.click('claim-upgrade');
+  assert.equal(ui.read('JSON.stringify({run,bossIndex})'),before);ui.click('face-boss');assert.equal(ui.read('run.phase'),'table');
+});
+
+test('boss introduction remains mandatory with exhausted rewards in initial and subsequent Endless encounters', () => {
+  const ui=setup(U,{autoFaceBoss:false});ui.click('start');
+  ui.read('run.upgrades=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));bossIndex=4;showBossIntroduction()');
+  ui.click('face-boss');fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('endless');
+  assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('bossIndex'),5);assert.equal(ui.read('state'),null);
+  ui.click('face-boss');fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+  assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('bossIndex'),6);assert.equal(ui.read('run.offers.length'),0);
+  assert.match(ui.html(),/ENDLESS &middot; ENCOUNTER 7/);ui.click('victory');assert.equal(ui.read('bossIndex'),6);
+});
+
+test('boss introduction returns to Drifter with cleared upgrades after defeat or completed-run New Run', () => {
+  for(const won of [false,true]){
+    let calls=0;const ui=setup({...U,offer(...args){calls++;return U.offer(...args);}},{autoFaceBoss:false});
+    ui.click('start');ui.read(`run.upgrades={'quick-draw':2};bossIndex=${won?4:2};showBossIntroduction()`);ui.click('face-boss');
+    fixture(ui,won);ui.click('next');fixture(ui,won);if(!won)ui.click('loss');ui.click('start');
+    assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('state'),null);assert.equal(ui.read('bossIndex'),0);
+    assert.equal(ui.read('Object.keys(run.upgrades).length'),0);assert.equal(ui.read('endless'),false);assert.equal(calls,0);
+    assert.match(ui.html(),/assets\/images\/bosses\/drifter.png/);ui.click('face-boss');assert.equal(ui.read('state.sides[0].discardAllowance'),1);
+  }
+});
+
+test('hand result overlay announces wins, losses and ties; its timer dismisses without advancing', () => {
+  for(const outcome of ['win','loss','tie']){
+    const ui=setup();ui.click('start');
+    if(outcome==='tie'){
+      ui.read('state.sides[1]=JSON.parse(JSON.stringify(state.sides[0]));state.bossCommitment=null;bossPlay=G.commitBossPlay(state,state.sides[1].hand.slice(0,3));render()');
+      [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');
+    }else fixture(ui,outcome==='win',false);
+    const overlay=ui.elements.get('hand-result-overlay');
+    const label=outcome==='win'?'HAND WON':outcome==='loss'?'HAND LOST':'DEAD HEAT';
+    assert.equal(overlay.hidden,false);assert.equal(overlay.dataset.outcome,outcome);
+    assert.equal(ui.elements.get('hand-result-announcement').textContent,label);
+    assert.equal(ui.document.activeElement,overlay);assert.equal(ui.elements.get('app').inert,true);
+    assert.match(ui.html(),/data-action="next"/);assert.match(ui.html(),/Your played cards/);
+    assert.match(ui.html(),/Boss cards/);assert.match(ui.html(),/table-status result-/);
+    const before=ui.read('JSON.stringify({state,run,bossIndex})');
+    ui.click('next');ui.click('play');assert.equal(ui.read('JSON.stringify({state,run,bossIndex})'),before);
+    assert.equal(ui.timers.size,1);const timer=[...ui.timers.values()][0];assert.equal(timer.delay,1400);
+    timer.fn();assert.equal(overlay.hidden,true);assert.equal(ui.timers.size,0);
+    assert.equal(ui.elements.get('app').inert,false);assert.equal(ui.elements.get('site-navigation').inert,false);
+    assert.equal(ui.read('JSON.stringify({state,run,bossIndex})'),before);
+    ui.read('dismissHandResult()');assert.equal(ui.read('state.handNumber'),1);
+  }
+});
+
+test('hand result overlay supports immediate click and keyboard dismissal with no duplicate actions', () => {
+  for(const key of [null,'Escape','Enter',' ']){
+    const ui=setup();ui.click('start');fixture(ui,true,false);
+    const overlay=ui.elements.get('hand-result-overlay'),timer=[...ui.timers.values()][0];
+    const next={focus(){ui.document.activeElement=this;}};ui.elements.get('app').querySelector=selector=>selector==='[data-action="next"]'?next:null;
+    let prevented=0,stopped=0;
+    const event={key,preventDefault(){prevented++;},stopPropagation(){stopped++;}};
+    const before=ui.read('JSON.stringify({state,run})');
+    const dismiss=()=>overlay.handlers[key===null?'click':'keydown'](event);
+    dismiss();assert.equal(overlay.hidden,true);assert.equal(ui.timers.size,0);
+    assert.equal(ui.document.activeElement,next);dismiss();timer.fn();
+    assert.equal(prevented,2);assert.equal(stopped,2);assert.equal(ui.read('JSON.stringify({state,run})'),before);
+    ui.click('next');assert.equal(ui.read('state.handNumber'),2);
+    assert.equal(ui.elements.get('hand-result-announcement').textContent,'');
+  }
+});
+
+test('hand result overlay never interrupts boss victory, encounter defeat or final completion', () => {
+  for(const won of [true,false]){
+    const ui=setup();ui.click('start');fixture(ui,won);ui.click('next');fixture(ui,won,false);
+    assert.notEqual(ui.read('state.winner'),null);assert.equal(ui.elements.get('hand-result-overlay').hidden,true);
+    assert.equal(ui.timers.size,0);assert.match(ui.html(),won?/Boss Defeated/:/Run Over/);
+  }
+  const ui=setup();ui.click('start');ui.read('bossIndex=4;state.wins=[1,0]');fixture(ui,true,false);
+  assert.equal(ui.read('run.phase'),'complete');assert.match(ui.html(),/Run Complete/);
+  assert.equal(ui.elements.get('hand-result-overlay').hidden,true);assert.equal(ui.timers.size,0);
+});
 
 test('five encounters advance only on victory, finish screen offers optional endless, new run resets', () => {
   const ui = setup(); ui.click('start');
@@ -41,7 +164,7 @@ test('five encounters advance only on victory, finish screen offers optional end
     fixture(ui,true); assert.equal(ui.read('state.winner'),null); ui.click('next');
     fixture(ui,true); assert.equal(ui.read('state.winner'),0); ui.click('victory'); claimFirst(ui);
   }
-  assert.match(ui.html(),/You saw daylight/); assert.match(ui.html(),/Play endless/);
+  assert.match(ui.html(),/Run Complete/); assert.match(ui.html(),/Endless Mode/);
   ui.click('endless'); assert.equal(ui.read('run.phase'),'upgrade'); claimFirst(ui);
   assert.equal(ui.read('bossIndex'),5); assert.equal(ui.read('endless'),true);
   assert.match(ui.html(),/ENDLESS &middot; ENCOUNTER 6/); assert.match(ui.html(),/The Undertaker/); assert.match(ui.html(),/src="assets\/images\/bosses\/undertaker\.png"/);
@@ -51,7 +174,7 @@ test('five encounters advance only on victory, finish screen offers optional end
 });
 test('one encounter defeat ends run and retry starts from boss one', () => {
   const ui = setup(); ui.click('start'); fixture(ui,false); ui.click('next'); fixture(ui,false);
-  assert.equal(ui.read('state.winner'),1); assert.match(ui.html(),/Run over/);
+  assert.equal(ui.read('state.winner'),1); assert.match(ui.html(),/Run Over/);
   ui.click('loss'); assert.match(ui.html(),/The house remembers/); assert.match(ui.html(),/0 bosses defeated/);
   ui.click('start'); assert.deepEqual([...ui.read('state.wins')],[0,0]); assert.equal(ui.read('bossIndex'),0);
 });
@@ -67,7 +190,7 @@ test('bosses one to four reward normally; final victory defers offer generation 
   }
   const collection=ui.read('JSON.stringify(run.upgrades)');
   fixture(ui,true);ui.click('next');fixture(ui,true);
-  assert.equal(ui.read('run.phase'),'complete');assert.match(ui.html(),/You saw daylight/);
+  assert.equal(ui.read('run.phase'),'complete');assert.match(ui.html(),/Run Complete/);
   assert.doesNotMatch(ui.html(),/upgrade-choice|claim-upgrade/);assert.equal(offersGenerated,4);
   assert.equal(ui.read('JSON.stringify(run.upgrades)'),collection);assert.equal(ui.read('run.offers.length'),0);
   const complete=ui.read('JSON.stringify({run,bossIndex,endless,state})');
@@ -104,7 +227,7 @@ test('an exhausted pool still shows completion first and skips reward selection 
   let calls=0;const ui=setup({...U,offer(...args){calls++;return U.offer(...args);}});ui.click('start');
   ui.read('bossIndex=4;run.upgrades=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));startEncounter()');
   const collection=ui.read('JSON.stringify(run.upgrades)');fixture(ui,true);ui.click('next');fixture(ui,true);
-  assert.equal(ui.read('run.phase'),'complete');assert.match(ui.html(),/You saw daylight/);assert.equal(calls,0);
+  assert.equal(ui.read('run.phase'),'complete');assert.match(ui.html(),/Run Complete/);assert.equal(calls,0);
   ui.click('endless');assert.equal(calls,1);assert.equal(ui.read('bossIndex'),5);assert.equal(ui.read('run.phase'),'table');
   assert.equal(ui.read('run.offers.length'),0);assert.equal(ui.read('JSON.stringify(run.upgrades)'),collection);
   assert.equal(ui.read('boss()'),G.bosses[4]);assert.match(ui.html(),/ENDLESS &middot; ENCOUNTER 6/);
@@ -177,17 +300,17 @@ test('rules modal opens and closes without changing selections or encounter stat
   assert.equal(ui.read('JSON.stringify({state,selected,bossPlay,bossIndex,endless})'),before);
 });
 
-test('poster header uses current/total progress and an uncapped hand indicator', () => {
+test('poster header keeps progress while hand counting continues without a visible indicator', () => {
   const ui=setup();ui.click('start');
   assert.match(ui.read('pathMarkup()'),/01 <span class="progress-total">\/ 05/);
   assert.match(ui.html(),/alt="The Drifter, Western wanted poster"/);
   assert.match(ui.html(),/<h2 class="boss-fallback" hidden>The Drifter<\/h2>/);
-  assert.match(ui.html(),/class="score-hand">Hand 1</);
+  assert.equal(ui.read("state.handNumber"),1);assert.doesNotMatch(ui.html(),/class="score-hand"/);
   vm.runInContext('state.handNumber=4;render()',ui.context);
-  assert.match(ui.html(),/class="score-hand">Hand 4</);
+  assert.equal(ui.read("state.handNumber"),4);assert.doesNotMatch(ui.html(),/class="score-hand"/);
   assert.doesNotMatch(ui.html(),/Hand 4\/3|boss-path/);
   fixture(ui,true);assert.match(ui.html(),/Boss: 1 of 2 chips remaining/);ui.click('next');
-  assert.match(ui.html(),/class="score-hand">Hand 5</);
+  assert.equal(ui.read("state.handNumber"),5);assert.doesNotMatch(ui.html(),/class="score-hand"/);
   fixture(ui,true);ui.click('victory'); claimFirst(ui);
   assert.match(ui.read('pathMarkup()'),/02 <span class="progress-total">\/ 05/);
 });
@@ -232,19 +355,25 @@ test('Play button names all six evaluated hand types and defaults otherwise', ()
   vm.runInContext('selected=state.sides[0].hand.slice(0,4);render()',ui.context);assert.match(ui.html(),/>Play Three<\/button>/);
 });
 
-test('encounter announcements replace ordinary hand feedback and retain chips and actions', () => {
+test('milestone screens replace ended tables and keep immediate, guarded continuation buttons', () => {
   for(const won of [true,false]){
     const ui=setup();ui.click('start');fixture(ui,won);
     assert.match(ui.html(),new RegExp('table-status result-'+(won?'win':'loss')));
-    assert.doesNotMatch(ui.html(),/encounter-result/);
     ui.click('next');fixture(ui,won);
-    assert.match(ui.html(),/encounter-result/);
-    assert.match(ui.html(),won?/>Boss defeated<\//:/>Run over<\//);
-    assert.match(ui.html(),won?/<p>The Drifter<\/p>/:/Defeated by The Drifter/);
-    assert.doesNotMatch(ui.html(),/You take the hand\.|The boss takes the hand\./);
-    assert.equal((ui.html().match(/class="poker-chip/g)||[]).length,4);
-    assert.equal((ui.html().match(/class="poker-chip spent"/g)||[]).length,2);
-    assert.match(ui.html(),won?/data-action="victory"/:/data-action="loss"/);
+    assert.match(ui.html(),new RegExp('milestone milestone-'+(won?'boss':'loss')));
+    assert.match(ui.html(),won?/>Boss Defeated<\//:/>Run Over<\//);
+    if(won){assert.doesNotMatch(ui.html(),/class="milestone-subtitle"/);assert.match(ui.html(),/class="defeat-mark"/);}
+    else {assert.match(ui.html(),/Defeated by The Drifter/);assert.doesNotMatch(ui.html(),/class="defeat-mark"/);}
+    assert.match(ui.html(),/src="assets\/images\/bosses\/drifter.png"/);
+    assert.doesNotMatch(ui.html(),/class="poker-chip|Card table|Your played cards|data-action="next"/);
+    assert.match(ui.html(),won?/>Choose Upgrade<\/button>/:/>Run Summary<\/button>/);
+    assert.doesNotMatch(ui.html(),/disabled/);assert.equal(ui.elements.get('hand-result-overlay').hidden,true);
+    assert.equal(ui.read('run.phase'),'table');assert.equal(ui.read('bossIndex'),0);
+    ui.click(won?'victory':'loss');
+    assert.equal(ui.read('run.phase'),won?'upgrade':'defeat');
+    const after=ui.read('JSON.stringify({run,state,bossIndex})');ui.click(won?'victory':'loss');
+    assert.equal(ui.read('JSON.stringify({run,state,bossIndex})'),after);
+    if(!won)assert.match(ui.html(),/The house remembers/);
   }
 });
 
@@ -258,7 +387,7 @@ test('reward selection gates advancement, claims once and retains collection wit
   ui.click('select-upgrade',undefined,'not-offered');
   assert.equal(ui.read('bossIndex'),0);assert.equal(ui.read('run.selectedUpgrade'),null);
   ui.click('select-upgrade',undefined,offers[0]);assert.equal(ui.read('run.selectedUpgrade'),offers[0]);
-  assert.match(ui.html(),/chosen/);assert.match(ui.html(),/All six upgrades are enabled/);
+  assert.match(ui.html(),/chosen/);assert.match(ui.html(),/>Claim your reward<\/h1>/);assert.doesNotMatch(ui.html(),/All six upgrades are enabled|class="upgrade-meta"|class="eyebrow"/);
   ui.elements.get('upgrades-toggle').handlers.click();
   assert.match(ui.elements.get('upgrades-content').innerHTML,/No upgrades collected yet/);
   ui.elements.get('upgrades-close').handlers.click();
@@ -275,7 +404,7 @@ test('repeat rewards show improvements; endless advances normally when every upg
   const max=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));max['quick-draw']=1;
   vm.runInContext(`run.upgrades=${JSON.stringify(max)};endless=true;bossIndex=5`,ui.context);
   fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
-  assert.deepEqual([...ui.read('run.offers')],['quick-draw']);assert.match(ui.html(),/Improve: Level 1 &rarr; 2/);
+  assert.deepEqual([...ui.read('run.offers')],['quick-draw']);assert.match(ui.html(),/aria-label="Quick Draw; Improve from Level 1 to 2"/);
   claimFirst(ui);assert.equal(ui.read('run.upgrades["quick-draw"]'),2);assert.equal(ui.read('bossIndex'),6);
   assert.equal(ui.read('state.sides[0].discardAllowance'),3);
   fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
@@ -299,7 +428,7 @@ test('Quick Draw run levels drive counters, illumination, batch/sequential use a
     else cards.slice(0,count).forEach(c=>{ui.click(undefined,c);ui.click('replace');});
     assert.equal(ui.read('selected.length'),0);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),0);
     assert.equal(ui.read('state.sides[0].out.length'),count);assert.match(ui.html(),/data-action="replace"[^>]*disabled/);
-    [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');ui.click('next');
+    [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');ui.read('dismissHandResult()');ui.click('next');
     assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),count);assert.equal(ui.read('state.sides[1].discardAllowance'),1);
     ui.click('start');assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),1);
   }
@@ -348,7 +477,7 @@ test('Lucky Break requires a confirmed candidate, blocks table actions and works
   assert.equal(ui.read('JSON.stringify({bossPlay,side:state.sides[1]})'),bossBefore);
   [...ui.read('state.sides[0].hand.slice(0,2)')].forEach(c=>ui.click(undefined,c));ui.click('replace');
   assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),0);
-  [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');ui.click('next');
+  [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');ui.read('dismissHandResult()');ui.click('next');
   assert.equal(ui.read('state.luckyBreak.remaining'),1);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),3);
   vm.runInContext('state.wins=[0,0]',ui.context);
   fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');claimFirst(ui);
@@ -421,7 +550,7 @@ test('Read the Table reveals only committed ranks on five backs and preserves se
     assert.equal(ui.read('JSON.stringify(state.readTheTable.reveals)'),revealed);
     [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');
     assert.deepEqual([...ui.read('state.last.plays[1]')],[...ui.read('state.bossCommitment')]);
-    ui.click('next');assert.equal(ui.read('state.readTheTable.remaining'),0);assert.equal(ui.read('state.readTheTable.reveals.length'),0);
+    ui.read('dismissHandResult()');ui.click('next');assert.equal(ui.read('state.readTheTable.remaining'),0);assert.equal(ui.read('state.readTheTable.reveals.length'),0);
     assert.match(ui.html(),/data-action="read-table"[^>]*disabled/);
     vm.runInContext('state.wins=[0,0]',ui.context);fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');claimFirst(ui);
     assert.equal(ui.read('run.upgrades["read-the-table"]')>=level,true);assert.equal(ui.read('state.readTheTable.remaining'),1);
@@ -488,4 +617,37 @@ test('Peek Ahead renders current information during both draw abilities, persist
   ui.click(undefined,undefined,undefined,undefined,ui.read('state.sides[0].hand[0]'));ui.click('carry-confirm');displayed();
   fixture(ui,true);ui.click('victory');claimFirst(ui);displayed();assert.equal(ui.read('state.peekAheadLevel'),2);
   ui.click('start');assert.equal(ui.read('state.peekAheadLevel'),0);assert.match(ui.read('playerDrawPile()'),/next card hidden/);
+});
+
+test('illustrated offers use central artwork, accessible effect descriptions and offered levels', () => {
+  const ui=setup();ui.click('start');fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+  for(const d of U.definitions){
+    for(let current=0;current<d.maxLevel;current++){
+      ui.read(`run.offers=['${d.id}'];run.upgrades={'${d.id}':${current}};run.selectedUpgrade=null;renderUpgradeSelection()`);
+      assert.ok(ui.html().includes(`src="${d.artwork.src}" width="${d.artwork.width}" height="${d.artwork.height}"`));
+      assert.match(ui.html(),new RegExp(`aria-describedby="offer-description-${d.id}"`));
+      assert.ok(ui.html().includes(d.levels[current]));
+      assert.match(ui.html(),current ? /Improve from Level 1 to 2/ : /New; Level 1 of [12]/);
+      assert.ok(ui.html().includes(`id="offer-description-${d.id}" class="visually-hidden"`));
+      assert.doesNotMatch(ui.html(),/class="upgrade-meta"|upgrade-offer-detail|class="eyebrow"|All six upgrades are enabled/);
+      if(d.unique)assert.match(ui.html(),/Unique/);
+      ui.click('select-upgrade',undefined,d.id);assert.match(ui.html(),/upgrade-choice chosen/);
+      assert.match(ui.html(),/aria-pressed="true"/);assert.equal(ui.read('run.upgrades')[d.id],current);
+    }
+  }
+});
+
+test('failed upgrade images expose readable fallback, preserve selection and stay usable after rerender', () => {
+  const ui=setup();ui.click('start');fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+  const id=ui.read('run.offers[0]'),d=U.get(id),fallback={hidden:true};
+  const image={hidden:false,dataset:{upgradeArt:id},nextElementSibling:fallback,matches:selector=>selector==='.upgrade-portrait'};
+  const before=ui.read('JSON.stringify({run,state,bossIndex,endless})');
+  ui.elements.get('app').handlers.error({target:image});
+  assert.equal(image.hidden,true);assert.equal(fallback.hidden,false);
+  assert.equal(ui.read('JSON.stringify({run,state,bossIndex,endless})'),before);
+  ui.click('select-upgrade',undefined,id);
+  assert.ok(ui.html().includes(`alt="" decoding="async" hidden`));
+  assert.ok(ui.html().includes(`<span class="upgrade-fallback" aria-hidden="true" ><span class="upgrade-name">${d.name}</span>`));
+  assert.ok(ui.html().includes(d.levels[0]));ui.click('claim-upgrade');
+  assert.equal(ui.read('bossIndex'),1);assert.equal(ui.read('run.upgrades')[id],1);
 });

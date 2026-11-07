@@ -1,24 +1,23 @@
 # Dead Man's Hand: game design
 
-## Agreed experience and rules
+## Approved core mechanics
 
-A mobile web card roguelite about managing a small poker deck across consecutive hands: choose what wins now and what to preserve for later. Keep the existing portrait-friendly Western card table presentation.
+A mobile web Three Card Poker roguelite about choosing what wins now and what to conserve for later. Preserve the portrait-friendly Western card table and buildless implementation.
 
 - Each side has an independently shuffled 24-card deck: 9, 10, J, Q, K and Ace in four suits.
-- Start each hand holding five cards. Optionally discard and immediately replace one card before selecting three to play. Replacement is unavailable when the draw pile is empty.
-- Resolve the selected triples simultaneously. Keep the other two cards and draw back to five for the next hand.
-- Played and discarded cards remain unavailable for the encounter, except for the approved exhaustion exception below.
-- Rankings: straight flush > three of a kind > straight > flush > pair > high card. Compare ranks and kickers normally. Suits are equal. Ace is high; A-9-10 is not a straight.
-- First to two hand wins takes the encounter. Exact ties award neither side a point; continue playing.
-- Approved exhaustion exception: if either side cannot refill to five, BOTH sides receive fresh decks and five new cards, retaining encounter scores. Announce this clearly.
-- Losing one boss encounter ends the entire run. There are no lives or retries within a run.
-- Beat five bosses to complete the initial run; endless mode is optional afterward.
-- Base player and boss permissions match. Quick Draw grants the player additional discards; bosses retain one discard per hand. Boss difficulty still comes from AI decisions, not privileged cards or guaranteed outcomes.
-- Bosses must not see hidden player cards or the order of their future draws. The prototype commits boss decisions before player actions.
+- Hold five cards. The base allowance is one optional discard per hand, modified for the player by Quick Draw and Last Stand. Each discarded card immediately draws one new card. Use allowances together or separately; a requested batch must fit both the remaining allowance and draw pile. Invalid requests consume nothing.
+- Select three cards for simultaneous showdown against the boss's committed three. Discarding is optional. Normally retain the other two cards and draw three for the next hand. Flexible Carry is the approved alternative below.
+- Played and discarded cards enter that side's out pile and stay unavailable until the next encounter or the deck refresh exception.
+- Rankings: straight flush > three of a kind > straight > flush > pair > high card. Compare relevant ranks and kickers; suits have equal value. Ace is high, and A-9-10 is not a straight.
+- First to two hand wins takes the encounter. Exact ties award neither side a point; both sides still put their played cards out and continue to another hand.
+- If either side cannot refill normally to five, **both sides receive freshly shuffled decks and five new cards**, retaining the encounter score. This replaces the retained cards too. The table announces the refresh.
+- Bosses retain a maximum allowance of one discard per hand. Their difficulty comes from decisions, not privileged cards or guaranteed outcomes.
+- The boss decision is committed before player selection or discarding. Boss AI cannot see hidden player cards or future draw order; Read the Table reveals information from the existing commitment without allowing it to change.
+- One encounter loss ends the run. Five victories complete the initial run; Endless is optional. Run upgrades persist between bosses and into Endless, but New Run or a page refresh clears them. There is no save/resume.
 
-## Current boss implementation
+## Boss progression and decision policies
 
-| Boss | Strongest-three selection | Replacement policy |
+| Boss | Strongest-three selection | Discard policy |
 |---|---:|---|
 | The Drifter | 15% of hands; otherwise random | None |
 | The Gambler | 45%; otherwise random | Lowest card |
@@ -26,18 +25,88 @@ A mobile web card roguelite about managing a small poker deck across consecutive
 | The Sheriff | 100% | None |
 | The Undertaker | 100% | Informed expected value |
 
-These are initial skill settings, not locked balance targets. Endless repeats the fifth boss's skill level. Every boss may legally replace a card; some policies elect not to.
+These are implemented skill settings, not locked balance targets. Bosses may elect not to use their allowance. Endless continues with the Undertaker's artwork and decision policy, without adding new difficulty tiers.
 
-## Strategy assumptions
+## Implemented upgrades and rewards
 
-Greedy chooses the strongest available triple; random selects a legal triple uniformly. Conservation scores current win equity plus 0.65 times expected next-hand equity from the pair kept. At 1-1 it uses greedy selection. The weight was chosen before the reported simulations. Its fresh-deck future estimate does not fully model depletion.
+`upgrades.js` owns the central definitions, levels, eligibility, descriptions and artwork metadata. `engine.js` applies gameplay effects; `app.js` manages the run collection, selection and transitions. Behaviour comes from code, not wording embedded in an illustration.
 
-Informed replacement averages possible replacements from the unordered remaining card pool and discards only when expected strategy score improves. It does not know the next draw or opponent's hand. Equity is based on the exact distribution of the strongest triple from a fresh random five-card hand. These remain heuristic strategies, not optimal play.
+Offer up to three uniformly sampled, distinct eligible upgrade identities after a boss victory. A collected upgrade can be offered at its next level; all levels are capped at two except unique Last Stand, capped at one. Maxed upgrades and an owned Last Stand are excluded. The player explicitly selects and claims one; nothing is awarded automatically. Fewer eligible upgrades mean fewer choices. An empty pool skips selection and continues to the next introduction.
 
-## Future ideas requiring discussion
+The fifth reward is deferred until the player chooses Endless from Run Complete. It is not generated or consumed before that choice and is abandoned on New Run. Subsequent Endless victories follow the same eligibility and reward rules.
 
-The approved foundation offers up to three uniformly sampled, distinct upgrade choices after victories over bosses 1 to 4. Claim one before advancing. Defeating the fifth boss immediately shows the completion screen, without generating a reward. Choosing Endless generates the deferred fifth reward; claim one before the first endless encounter, or advance directly if no eligible upgrades remain. Choosing New run instead clears the run without offering that reward. Endless mode continues rewards while eligible upgrades remain and advances normally once everything is maxed.
+| Upgrade | Level 1 | Level 2 |
+|---|---|---|
+| Quick Draw | Two player discards per hand. | Three player discards per hand. |
+| Lucky Break | One activation per boss. | Two activations per boss. |
+| Flexible Carry | One activation per boss. | Two activations per boss. |
+| Read the Table | Once per boss, reveal the rank of one randomly selected committed boss card. | Once per boss, reveal ranks of two distinct randomly selected committed boss cards. |
+| Last Stand | Unique passive: two extra discards per subsequent hand once the boss has one win. | Not available; cannot stack or evolve. |
+| Peek Ahead | Always show the rank of the player's actual next draw. | Always show its rank and suit. |
 
-`upgrades.js` is the central registry for Quick Draw, Lucky Break, Flexible Carry, Read the Table, Last Stand and Peek Ahead, their descriptions and levels. Owned upgrades can be offered at their next level; maxed upgrades and collected unique Last Stand are excluded. Collection belongs to the current run, survives entry to endless and resets on New run. Refresh still resets the session.
+### Discard allowances and Last Stand
 
-**Quick Draw is enabled:** Level 1 grants two player discards per hand; Level 2 grants three. They may be used separately or together, reset each hand and survive bilateral deck refreshes. Requested batches must fit both the remaining allowance and the draw pile; rejected batches consume nothing. Bosses stay at one discard per hand. **Lucky Break is enabled:** select exactly one held card and activate it before showdown. It spends one normal discard and one use, puts the original card out and draws the next two cards into a required choice. Confirm one to restore the five-card hand; the other goes out. Level 1 grants one activation per boss and Level 2 grants two. At least two draw cards are required. Pending candidates count toward card accounting; discarding and showdown are locked until confirmation. Uses persist through hands and bilateral refreshes, reset at each boss, and the upgrade resets on a new run. **Flexible Carry is enabled:** after a non-final showdown, optionally retain two and draw four, then confirm one of the six cards for the out pile. It spends no normal discard or Lucky Break use. Level 1 grants one use per boss and Level 2 grants two. Activation requires four player draw cards and enough cards for both sides to refill normally; otherwise the normal refill and bilateral exhaustion rule take precedence. The next hand begins only after the six-card choice is confirmed. Uses persist through hands and deck refreshes, reset at each boss, and the upgrade resets on a new run. **Read the Table is enabled:** once per boss at either level, reveal ranks from one (Level 1) or two distinct (Level 2) randomly selected cards in the already committed boss trio. Distinct cards may share a rank. Suits, unselected cards and future draw order remain hidden. A rank-only hint appears at the actual card position among five backs and persists through player discards and Lucky Break until showdown. New hands and refreshes clear old hints and commitments without restoring the use; a new boss restores it. It spends no discard. The engine freezes the committed trio, prevents further boss discards or decisions and rejects a different showdown trio. **Last Stand is enabled:** this unique passive adds two player discards at the next-hand boundary once the boss has one hand win. It adds to the base Quick Draw allowance (totals 3, 4 or 5), never retroactively changes the completed hand, and never stacks across ties. It applies after a normal refill, Flexible Carry confirmation or bilateral refresh; bosses retain one discard. It ends when the encounter ends and starts inactive at the next boss. **Peek Ahead is enabled:** a compact player draw-pile indicator is always visible. Without ownership it shows a back; Level 1 shows only the actual next rank, with neutral colour and no suit in accessible text; Level 2 adds the suit. Empty piles show an empty state. A read-only query of the first player pile card updates with every render, including pending Lucky Break and Flexible Carry choices, normal refills, bilateral refreshes and new encounters. It spends nothing, makes no random calls and never changes deck order or boss information. All six initial upgrades are functional. Further balance changes and permanent unlocks require discussion. There is no shop, currency, permanent progression, account, backend or multiplayer.
+Quick Draw allowance resets at each new hand, including after a bilateral refresh. Last Stand activates only at the next-hand boundary after the boss earns its first win; it never changes the completed hand retroactively. It adds two to the base/Quick Draw allowance: totals are 3, 4 or 5. It remains active through ties while the boss has one win, does not accumulate, ends with the encounter and starts inactive at a new boss. Flexible Carry confirmation uses the same next-hand boundary. Boss allowances are unchanged.
+
+### Lucky Break
+
+Before showdown, select exactly one held card and activate. Spend one normal discard and one ability use; put the original card out and draw the next two cards into a required choice. Confirm one to restore the five-card hand; the other goes out. Both candidates are consumed from the draw pile and count toward card accounting while pending.
+
+Activation requires one available normal discard, one ability use and at least two draw cards. Invalid attempts consume nothing. Ordinary discarding and showdown are blocked during the choice. Resolve it before returning to normal selection; the original selection clears. Level 2 grants two separate activations, not an additional choice within one activation.
+
+### Flexible Carry
+
+After a non-final showdown, optionally retain two and draw four, temporarily holding six. Choose and confirm any one card for the out pile; the remaining five begin the next hand. Declining performs the normal refill. No normal discard or Lucky Break use is spent.
+
+It is unavailable after an encounter ends or during reward/progression screens. Activation requires four player draw cards and enough cards for both sides to refill normally. A required bilateral refresh takes precedence. Showdown cannot begin until the six-card choice is resolved.
+
+### Read the Table
+
+The boss's actual three-card decision must already be committed. Reveal ranks only, never suits, from one or two distinct committed cards. **Distinct cards may share a rank.** Level 2 increases cards revealed, not activations: there is one activation per boss at either level, with no discard cost.
+
+Hints appear at the correct positions among the five boss card backs and remain until showdown, including through player discards and Lucky Break. Other backs do not identify which cards were committed. New hands/refreshes clear the hints and commitment without restoring the encounter use. The boss cannot discard again, change its decision or submit a different committed trio.
+
+### Peek Ahead and reset boundaries
+
+Peek Ahead reads only the first card of the player's actual draw pile. It spends nothing, makes no random calls and never reorders draws. Level 1 reveals no suit through colour, symbols or accessible text. The compact pile indicator shows an ordinary back without ownership and an empty state without stale information when exhausted. It updates during draws, pending Lucky Break and Flexible Carry choices, refills, refreshes and new encounters.
+
+Lucky Break, Flexible Carry and Read the Table uses persist between hands and through deck refreshes; they reset only with a new boss. All owned levels persist through the run. New Run resets collection and encounter state. Intro screens do not create a deck or reveal an undetermined next draw.
+
+## Current screen flow
+
+| Trigger | Presentation and continuation |
+|---|---|
+| Take a seat, New Run or Try again | Drifter introduction → Face the Boss → gameplay. |
+| Starting any later encounter | Upcoming poster, existing subtitle and compact progress → Face the Boss. |
+| Ordinary hand win/loss/tie | Brief HAND WON / HAND LOST / DEAD HEAT overlay → persistent showdown → Next hand, or optional Flexible Carry. |
+| Victory over bosses 1-4 | Boss Defeated → Choose Upgrade → select and claim → next introduction. |
+| Encounter loss | Run Over → Run Summary → existing summary / Try again flow. |
+| Fifth boss victory | Immediately Run Complete, without a prior Boss Defeated screen or reward offer. |
+| Endless Mode from Run Complete | Generate deferred fifth reward if eligible → claim → first Endless introduction. If the pool is empty, go directly to that introduction. |
+| Later Endless victories | Boss Defeated → reward/continuation → next Endless introduction. With no eligible upgrades, Continue skips reward selection. |
+
+Introductions remain until Face the Boss is pressed. Only then are decks created and the boss decision committed. Gameplay actions are blocked during introductions and mandatory ability choices. Endless progress uses labels such as ENDLESS · ENCOUNTER 6, never 06 / 05. Phase guards prevent duplicate reward claiming or repeated progression.
+
+## Artwork, presentation and accessibility conventions
+
+- Boss wanted posters are PNGs in `assets/images/bosses/`, selected from existing boss identity. Illustrated upgrade PNGs are in `assets/images/upgrades/`; preserve their exact filenames and metadata in `upgrades.js`.
+- Do not modify supplied images. Preserve aspect ratios, show the whole image without cropping, and reserve image space while loading. Boss failures reveal a text name; upgrade failures reveal a readable definition-based text card. Accessible names/descriptions identify bosses and offered upgrade levels/effects.
+- The reward screen intentionally contains only navigation, centred Claim your reward, illustrations and Claim Upgrade. Visible level badges and extra effect captions are removed; offered levels/effects remain accessible. Cards stack on mobile and scale to available viewport height, with natural scrolling on unusually small screens rather than clipping.
+- Artwork may contain base-level wording such as "X1 per round." It does not override per-boss use limits or improved-level effects defined by code. The Upgrades dialog provides current owned levels and descriptions.
+- Ordinary overlays last about 1.4 seconds, announce the result accessibly and dismiss immediately on tap/click, Enter, Space or Escape. They block underlying actions temporarily, restore focus and never advance the hand. They do not appear on encounter-ending hands.
+- Persistent ordinary results are Hand Won (green), Hand Lost (red) and Dead Heat (gold), with accurate hand names separated by a smaller "vs" and no trailing comparison full stop. Chips show encounter scores; the internal hand count continues in history without a header indicator.
+- Boss Defeated is a dedicated poster-led screen with no separate duplicate boss-name caption. Two decorative red SVG brushstrokes paint an X over the poster; the image file is untouched. The X stays, has no pointer interaction and appears fully drawn with reduced motion. It is absent from introductions, Run Over and Run Complete.
+- Run Over has a red heading, Defeated by [boss] and Run Summary. Run Complete has its own celebratory treatment and Endless Mode / New Run choices. Neither automatically advances.
+- Intro and milestone entrance animations are short, respect reduced motion and never delay buttons. Preserve sensible keyboard focus and immediately usable controls.
+- How to Play is an accessible, internally scrollable dialog with gold section headings, valid miniature Three Card Poker examples, boss progression and upgrade explanations. Preserve Escape closing and focus management; the Upgrades collection dialog follows the same accessibility conventions.
+- Home shows the title, existing gold tagline beneath it, decorative playing cards and Take a seat. A home-specific CSS rule hides its footer without changing footer behaviour elsewhere; navigation remains available.
+
+## Simulation strategy assumptions
+
+Greedy chooses the strongest available triple; random selects a legal triple uniformly. Conservation scores current win equity plus 0.65 times expected next-hand equity from the retained pair, using a fresh-deck future estimate that does not fully model depletion. At 1-1 it uses greedy selection. The weight was chosen before the historical results.
+
+Informed discarding averages possible draws from the unordered remaining card pool and discards only when expected strategy score improves. It does not know the next draw or opponent's hand. Equity uses the exact distribution of the strongest triple from a fresh random five-card hand. These are heuristic strategies, not optimal play. The preserved baseline has no upgrade effects and is not a measurement of current human difficulty; see PROJECT_STATUS.md.
+
+## Deferred features and boundaries
+
+Shops, currency, permanent unlocks/progression, save/resume, accounts, a backend and multiplayer are not implemented or approved by this milestone. New features or changes to balance, rules and progression require discussion. No additional upgrade set or difficulty tiers are implied by this document.

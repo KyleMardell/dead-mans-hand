@@ -1,9 +1,45 @@
 'use strict';
 const G = DMH;
 const U = DMHUpgrades;
+const failedUpgradeArtwork = new Set();
 const newRun = () => ({ upgrades: {}, phase: 'intro', offers: [], selectedUpgrade: null });
 let run = newRun();
 const app = document.getElementById('app');
+const handResultOverlay = document.getElementById('hand-result-overlay');
+const handResultAnnouncement = document.getElementById('hand-result-announcement');
+let handResultTimer = null;
+function dismissHandResult() {
+  if (handResultOverlay.hidden) return;
+  clearTimeout(handResultTimer); handResultTimer = null;
+  handResultOverlay.hidden = true;
+  app.inert = false;
+  document.getElementById('site-navigation').inert = false;
+  const next = app.querySelector('[data-action="next"]');
+  if (next) next.focus({preventScroll:true});
+}
+function showHandResult(result) {
+  if (run.phase !== 'table' || state.phase !== 'reveal' || state.winner !== null) return;
+  clearTimeout(handResultTimer);
+  const outcome = result > 0 ? 'win' : result < 0 ? 'loss' : 'tie';
+  const message = result > 0 ? 'HAND WON' : result < 0 ? 'HAND LOST' : 'DEAD HEAT';
+  document.getElementById('hand-result-message').textContent = message;
+  handResultAnnouncement.textContent = message;
+  handResultOverlay.dataset.outcome = outcome;
+  handResultOverlay.setAttribute('aria-label', `${message}. Dismiss hand result`);
+  handResultOverlay.hidden = false;
+  app.inert = true;
+  document.getElementById('site-navigation').inert = true;
+  handResultOverlay.focus({preventScroll:true});
+  handResultTimer = setTimeout(dismissHandResult, 1400);
+}
+handResultOverlay.addEventListener('click', event => {
+  event.preventDefault(); event.stopPropagation(); dismissHandResult();
+});
+handResultOverlay.addEventListener('keydown', event => {
+  if (['Escape','Enter',' '].includes(event.key)) {
+    event.preventDefault(); event.stopPropagation(); dismissHandResult();
+  }
+});
 let state, bossIndex = 0, bossPlay, selected = [], discardWarning = false, notice = '', log = [], endless = false, luckyCandidate = null, carryCandidate = null;
 const boss = () => G.bosses[Math.min(bossIndex, 4)];
 function cardMarkup(c, interactive = false, selection = selected, dataKey = 'card') {
@@ -23,11 +59,30 @@ function commitBossDecision() {
   bossPlay = G.commitBossPlay(state, G.aiTurn(state, 1, boss(), Math.random));
 }
 function intro() {
-  app.className = '';
+  app.className = 'home-screen';
   document.body.classList.remove('playing');
-  app.innerHTML = `<section class="intro"><p class="eyebrow">Play three. Keep two. Make them count.</p><h1>Dead Man’s<br>Hand</h1><p class="lead">Five bosses stand between you and daylight.</p><div class="hero-cards" aria-hidden="true">${[12, 16, 20].map(c => cardMarkup(c)).join('')}</div><button class="primary" data-action="start">Take a seat <span aria-hidden="true">↗</span></button></section>`;
+  app.innerHTML = `<section class="intro"><h1>Dead Man’s<br>Hand</h1><p class="eyebrow">Play three. Keep two. Make them count.</p><div class="hero-cards" aria-hidden="true">${[12, 16, 20].map(c => cardMarkup(c)).join('')}</div><button class="primary" data-action="start">Take a seat <span aria-hidden="true">↗</span></button></section>`;
+}
+function showBossIntroduction() {
+  dismissHandResult();
+  handResultAnnouncement.textContent = '';
+  run.phase = 'boss-intro';
+  state = null; bossPlay = null; selected = [];
+  app.className = 'milestone-screen boss-intro-screen';
+  document.body.classList.add('playing');
+  document.getElementById('upgrades-toggle').hidden = false;
+  app.innerHTML = `<section class="milestone milestone-intro" aria-labelledby="boss-intro-title">
+    <h1 id="boss-intro-title" class="visually-hidden" tabindex="-1" aria-describedby="boss-intro-subtitle">${boss().name}</h1>
+    ${pathMarkup()}
+    ${bossArtwork()}
+    <p id="boss-intro-subtitle" class="boss-intro-subtitle">${boss().title}</p>
+    <div class="actions"><button class="primary" data-action="face-boss">Face the Boss</button></div>
+  </section>`;
+  const heading = app.querySelector('#boss-intro-title');
+  if (heading) heading.focus({preventScroll:true});
 }
 function startEncounter() {
+  handResultAnnouncement.textContent = '';
   run.phase = 'table';
   document.getElementById('upgrades-toggle').hidden = false;
   state = G.newEncounter(Math.random, run.upgrades); luckyCandidate = null; carryCandidate = null; selected = []; discardWarning = false; log = []; notice = '';
@@ -37,10 +92,10 @@ function startEncounter() {
 function pathMarkup() {
   return endless ? `<span class="encounter-progress endless-progress">ENDLESS &middot; ENCOUNTER ${bossIndex + 1}</span>` : `<div class="encounter-progress" role="img" aria-label="Boss ${bossIndex + 1} of 5"><span>${String(bossIndex + 1).padStart(2, '0')} <span class="progress-total">/ 05</span></span><span class="progress-track" aria-hidden="true"><span style="width:${(bossIndex + 1) * 20}%"></span></span></div>`;
 }
-function bossArtwork() {
+function bossArtwork(defeated = false) {
   // Derive the PNG asset name from the existing boss identity.
   const filename = boss().name.replace(/^The /, '').toLowerCase();
-  return `<div class="boss-artwork"><img class="boss-portrait" src="assets/images/bosses/${filename}.png" width="1060" height="1484" alt="${boss().name}, Western wanted poster" loading="eager" decoding="async"><h2 class="boss-fallback" hidden>${boss().name}</h2></div>`;
+  return `<div class="boss-artwork"><img class="boss-portrait" src="assets/images/bosses/${filename}.png" width="1060" height="1484" alt="${boss().name}, Western wanted poster" loading="eager" decoding="async"><h2 class="boss-fallback" hidden>${boss().name}</h2>${defeated ? `<svg class="defeat-mark" viewBox="0 0 100 140" aria-hidden="true" focusable="false"><path class="paint-stroke paint-first" d="M12 12 L18 14 L29 32 L31 32 L49 59 L50 63 L70 91 L73 92 L89 119 L87 127 L81 122 L66 102 L65 98 L44 71 L41 70 L25 45 L22 44 L10 22 L11 18 Z"/><path class="paint-stroke paint-second" d="M87 13 L92 19 L79 39 L80 41 L60 66 L58 72 L40 96 L39 100 L18 126 L11 129 L9 122 L24 101 L28 98 L45 74 L45 70 L63 46 L65 40 L80 20 Z"/></svg>` : ''}</div>`;
 }
 function scoreChips(sideIndex) {
   const spent = state.wins[1 - sideIndex];
@@ -70,6 +125,11 @@ function playerDeckCaption() {
 function render() {
   if (state.phase === 'flexible-carry') { renderFlexibleCarryChoice(); return; }
   if (state.phase === 'lucky-break') { renderLuckyBreakChoice(); return; }
+  if (state.winner !== null) {
+    if (state.winner === 0 && bossIndex === 4 && !endless) ending(true);
+    else renderMilestone(state.winner === 0 ? 'boss' : 'loss');
+    return;
+  }
   app.className = 'gameplay';
   document.body.classList.add('playing');
   const reveal = state.phase === 'reveal', ended = state.winner !== null;
@@ -81,8 +141,8 @@ function render() {
   let title = '', sub = '', resultTone = '';
   if (reveal) {
     resultTone = state.last.result > 0 ? 'win' : state.last.result < 0 ? 'loss' : 'tie';
-    title = state.last.result > 0 ? 'You take the hand.' : state.last.result < 0 ? 'The boss takes the hand.' : 'A dead heat.';
-    sub = state.last.result === 0 ? 'No point awarded. Play another hand.' : `${G.evaluate(state.last.plays[0]).name} against ${G.evaluate(state.last.plays[1]).name}.`;
+    title = state.last.result > 0 ? 'Hand Won' : state.last.result < 0 ? 'Hand Lost' : 'Dead Heat';
+    sub = `<span class="comparison-hand">${G.evaluate(state.last.plays[0]).name}</span> <span class="comparison-vs">vs</span> <span class="comparison-hand">${G.evaluate(state.last.plays[1]).name}</span>`;
     if (ended) {
       title = state.winner === 0 ? 'Boss defeated' : 'Run over';
       sub = state.winner === 0 ? boss().name : `Defeated by ${boss().name}`;
@@ -94,7 +154,6 @@ function render() {
       <div class="encounter-info">
         ${pathMarkup()}
         <p class="boss-sub">${boss().title}</p>
-        <span class="score-hand">Hand ${state.handNumber}</span>
         ${state.lastStand.active ? '<p class="last-stand-note" role="status">Last Stand active &middot; +2 discards</p>' : ''}
       </div>
     </header>
@@ -142,7 +201,7 @@ function activateLuckyBreak() {
 // Rewards are a run-level phase; enabled passives enter the next encounter through engine.js.
 function advanceAfterReward() {
   run.offers = []; run.selectedUpgrade = null;
-  bossIndex++; startEncounter();
+  bossIndex++; showBossIntroduction();
 }
 function beginReward() {
   const deferredFinalReward = run.phase === 'complete' && bossIndex === 4 && endless;
@@ -159,10 +218,14 @@ function beginReward() {
 function renderUpgradeSelection() {
   app.className = 'upgrade-screen';
   document.body.classList.add('playing');
-  app.innerHTML = `<section aria-labelledby="reward-title"><p class="eyebrow">${boss().name} defeated</p><h1 id="reward-title" tabindex="-1">Claim your reward.</h1><p class="upgrade-stage">All six upgrades are enabled.</p><div class="upgrade-offers" role="group" aria-label="Choose one upgrade">
+  app.innerHTML = `<section aria-labelledby="reward-title"><h1 id="reward-title" tabindex="-1">Claim your reward</h1><div class="upgrade-offers" role="group" aria-label="Choose one upgrade">
     ${run.offers.map(id => {
       const d = U.get(id), current = run.upgrades[id] || 0, next = current + 1;
-      return `<button class="upgrade-choice${run.selectedUpgrade === id ? ' chosen' : ''}" data-action="select-upgrade" data-upgrade="${id}" aria-pressed="${run.selectedUpgrade === id}"><span class="upgrade-meta">${d.type} &middot; ${d.implemented ? 'Enabled' : 'Not yet implemented'} &middot; ${d.unique ? 'Unique &middot; ' : ''}${current ? `Improve: Level ${current} &rarr; ${next}` : `Level ${next} / ${d.maxLevel}`}</span><span class="upgrade-name">${d.name}</span><span class="upgrade-description">${d.levels[next - 1]}</span></button>`;
+      const failed = failedUpgradeArtwork.has(id);
+      return `<button class="upgrade-choice${run.selectedUpgrade === id ? ' chosen' : ''}" style="--art-ratio:${d.artwork.width / d.artwork.height}" data-action="select-upgrade" data-upgrade="${id}" aria-pressed="${run.selectedUpgrade === id}" aria-label="${d.name}; ${current ? `Improve from Level ${current} to ${next}` : `New; Level ${next} of ${d.maxLevel}${d.unique ? '; Unique' : ''}`}" aria-describedby="offer-description-${id}">
+        <span class="upgrade-artwork" style="aspect-ratio:${d.artwork.width}/${d.artwork.height}"><img class="upgrade-portrait" data-upgrade-art="${id}" src="${d.artwork.src}" width="${d.artwork.width}" height="${d.artwork.height}" alt="" decoding="async" ${failed ? 'hidden' : ''}><span class="upgrade-fallback" aria-hidden="true" ${failed ? '' : 'hidden'}><span class="upgrade-name">${d.name}</span><span class="upgrade-description">${d.levels[next - 1]}</span></span></span>
+        <span id="offer-description-${id}" class="visually-hidden">${d.levels[next - 1]}</span>
+      </button>`;
     }).join('')}
     </div><button class="primary claim-upgrade" data-action="claim-upgrade" ${!run.selectedUpgrade ? 'disabled' : ''}>Claim Upgrade</button></section>`;
 }
@@ -180,20 +243,42 @@ function upgradeCollectionMarkup() {
 }
 // Resource errors do not bubble; capture them across subsequent UI renders.
 app.addEventListener('error', event => {
-  if (!event.target.matches('.boss-portrait')) return;
+  if (event.target.matches('.upgrade-portrait')) {
+    failedUpgradeArtwork.add(event.target.dataset.upgradeArt);
+  } else if (!event.target.matches('.boss-portrait')) return;
   event.target.hidden = true;
   event.target.nextElementSibling.hidden = false;
 }, true);
 function ending(won) {
   run.phase = won ? 'complete' : 'defeat';
+  if (won) { renderMilestone('complete'); return; }
   app.className = '';
   document.body.classList.remove('playing');
   app.innerHTML = `<section class="ending"><p class="eyebrow">${won ? 'THE FIRST FIVE · COMPLETE' : 'THE ROAD ENDS HERE'}</p><div class="symbol" aria-hidden="true">${won ? '♔' : '♠'}</div><h1>${won ? 'You saw daylight.' : 'The house remembers.'}</h1><p>${won ? 'Five bosses beaten. Walk away a winner, or keep playing against the Undertaker in endless mode.' : `${bossIndex} ${bossIndex===1?'boss':'bosses'} defeated. ${boss().name} took this encounter ${state.wins[1]}–${state.wins[0]}. A new run means a fresh start.`}</p><div class="actions">${won ? '<button class="secondary" data-action="endless">Play endless</button>' : ''}<button class="primary" data-action="start">${won ? 'New run' : 'Try again'}</button></div></section>`;
   const heading = app.querySelector('.ending h1');
   if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus(); }
 }
+function renderMilestone(kind) {
+  const complete = kind === 'complete', lost = kind === 'loss';
+  const title = complete ? 'Run Complete' : lost ? 'Run Over' : 'Boss Defeated';
+  app.className = 'milestone-screen';
+  document.body.classList.add('playing');
+  app.innerHTML = `<section class="milestone milestone-${kind}" aria-labelledby="milestone-title">
+    <p class="eyebrow">${complete ? 'THE FIRST FIVE · COMPLETE' : lost ? 'THE ROAD ENDS HERE' : 'ONE STEP CLOSER TO DAYLIGHT'}</p>
+    ${complete ? '<div class="completion-seal" aria-hidden="true">♠</div>' : ''}
+    <h1 id="milestone-title" tabindex="-1">${title}</h1>
+    ${kind === 'boss' ? '' : `<p class="milestone-subtitle">${lost ? 'Defeated by ' : ''}${boss().name}${complete ? ' defeated' : ''}</p>`}
+    ${bossArtwork(kind === 'boss')}
+    ${complete ? '<p class="milestone-message">Five bosses beaten. Daylight is yours.<br>Keep playing against the Undertaker in endless mode, or start a new run.</p>' : ''}
+    <div class="actions">${complete ? '<button class="secondary" data-action="endless">Endless Mode</button><button class="primary" data-action="start">New Run</button>' : `<button class="primary" data-action="${lost ? 'loss' : 'victory'}">${lost ? 'Run Summary' : U.eligible(run.upgrades).length ? 'Choose Upgrade' : 'Continue'}</button>`}</div>
+  </section>`;
+  const heading = app.querySelector('#milestone-title');
+  if (heading) heading.focus({preventScroll:true});
+}
 app.addEventListener('click', event => {
+  if (!handResultOverlay.hidden) { event.preventDefault(); event.stopPropagation(); return; }
   const target = event.target.closest('button'); if (!target || target.disabled) return;
+  if (run.phase === 'boss-intro' && target.dataset.action !== 'face-boss') return;
   if (state?.phase === 'flexible-carry') {
     if (target.dataset.carry !== undefined) {
       const card = Number(target.dataset.carry);
@@ -237,7 +322,14 @@ app.addEventListener('click', event => {
     render(); const focused = app.querySelector(`[data-card="${card}"]`); if(focused) focused.focus({preventScroll:true}); return;
   }
   switch (target.dataset.action) {
-    case 'start': run = newRun(); bossIndex = 0; endless = false; startEncounter(); break;
+    case 'start': run = newRun(); bossIndex = 0; endless = false; showBossIntroduction(); break;
+    case 'face-boss': {
+      if (run.phase !== 'boss-intro') return;
+      startEncounter();
+      const card = app.querySelector('[data-card]');
+      if (card) card.focus({preventScroll:true});
+      break;
+    }
     case 'read-table': {
       if (run.phase !== 'table' || state.phase !== 'choose' || !state.readTheTable.remaining || !state.bossCommitment) return;
       G.readTheTable(state);
@@ -273,15 +365,20 @@ app.addEventListener('click', event => {
     }
     case 'play': {
       if (run.phase !== 'table' || selected.length !== 3 || state.phase !== 'choose') return;
+      handResultAnnouncement.textContent = '';
       const result = G.reveal(state, [[...selected], bossPlay]);
       log.unshift(`Hand ${state.handNumber}: you ${result.plays[0].map(G.label).join(' ')} · boss ${result.plays[1].map(G.label).join(' ')} · ${result.result > 0 ? 'you win' : result.result < 0 ? 'boss wins' : 'tie'}`);
       notice = ''; discardWarning = false;
       if (state.winner === 0 && bossIndex === 4 && !endless) ending(true);
-      else render();
+      else {
+        render();
+        if (state.winner === null) showHandResult(result.result);
+      }
       break;
     }
     case 'next': {
       if (run.phase !== 'table' || state.winner !== null || state.phase !== 'reveal') return;
+      handResultAnnouncement.textContent = '';
       const refreshed = G.nextHand(state); selected = []; discardWarning = false;
       commitBossDecision();
       notice = refreshed ? 'Decks exhausted: both sides received fresh decks and five new cards. Score kept.' : '';

@@ -1,10 +1,42 @@
 # Dead Man's Hand: project status
 
-## Stage and provenance
+## Current milestone
 
-Working early local prototype, not production-ready. Imported by copying the complete editable source from `C:\Users\kyles\Documents\Codex\2026-11-05\referenced-chatgpt-conversation-this-is-an\outputs\dead-mans-hand` into `C:\Users\kyles\Documents\GitHub\dead-mans-hand`. The original source, source ZIP and standalone playable HTML remain in the original outputs directory. The editable source is the development project; the standalone export is not the source of truth.
+The playable mobile web roguelite now has five bosses, all six functional run upgrades and a complete introduction/reward/result flow. It remains buildless HTML/CSS/JavaScript, using Node 24 for local tools and no external runtime dependencies. The owner has reported completing a full five-boss run; that is human playtesting evidence, not a measured balance study or confirmation of a particular device.
 
-The import preserves runtime files, tests and simulation results unchanged. Setup adds repository guidance, ignores and documentation. The original workspace had no Git commits, pushes or deployment. This setup prepares a local initial commit and an empty private remote if available; the user performs the initial push. No license has been selected.
+Implemented presentation and interaction:
+
+- Illustrated boss wanted posters and six illustrated upgrade cards, with preserved proportions, accessible descriptions and text fallbacks. Artwork text does not determine upgrade effects.
+- A compact mobile table with poker chip scores, discard selection feedback, player draw-pile information and persistent Hand Won / Hand Lost / Dead Heat results with styled hand comparisons.
+- Accessible How to Play and Upgrades dialogs. The guide includes miniature ranking examples and current rule explanations.
+- Dismissible hand result overlays lasting about 1.4 seconds; they preserve showdown underneath and never advance gameplay automatically.
+- Dedicated Boss Defeated, Run Over and Run Complete screens. Boss Defeated adds a decorative painted red X; other screens do not. Transition buttons work during entrance animations, and reduced motion removes the animations.
+- A wanted-poster introduction before every encounter, including the first Drifter and every Endless encounter. No deck or boss commitment is created before Face the Boss.
+- A simplified home screen with the gold tagline beneath the title and its footer hidden.
+
+## Upgrades and progression
+
+Quick Draw, Lucky Break, Flexible Carry, Read the Table, Last Stand and Peek Ahead are implemented. Last Stand is unique with one level; the other five upgrades have two levels. Levels, eligibility and artwork metadata come from `upgrades.js`; gameplay effects and accounting are in `engine.js`, with UI and run transitions in `app.js`. See GAME_DESIGN.md for exact effects and reset boundaries.
+
+Bosses 1-4 lead from Boss Defeated through reward selection to the next introduction. One of up to three eligible offers is explicitly claimed. Run defeat leads to Run Over, then the existing summary/restart flow. Completing boss five immediately shows Run Complete; its reward is generated only after choosing Endless. New Run abandons that reward and clears the collection. Endless retains upgrades and Undertaker difficulty, offers rewards while eligible and always introduces the next encounter, even with an exhausted pool.
+
+## Validation record and current confidence
+
+### Historical import validation
+
+The original ten automated tests covered all 2,024 triple rankings, kickers/equal suits, discard limits, carryover, card accounting, forced exhaustion, reproducibility and five-boss/defeat/Endless UI transitions. All ten passed again after import under Node 24.21.0. The original handoff also reported browser checks for selection, discarding, showdown, carryover, first victory and boss-two advancement at 390 x 844. These are historical results, not a current complete validation claim.
+
+### Subsequent development checks
+
+Earlier upgrade/UI milestones reported a full suite of 70 passing tests. Later presentation, milestone and introduction work used focused regression and headless Chrome checks rather than rerunning the full suite after every change. Reported checks included 390 x 844 and 360 x 640 layouts where relevant, keyboard focus/dismissal, reduced motion, immediate transition controls, reward deferral, reset and duplicate-action guards. The latest painted-X/home polish also received a focused desktop visual check.
+
+Those results apply to the changes checked at the time. They do not establish that the entire current suite has passed after all subsequent edits, nor do headless checks establish physical iOS/Android behaviour or actual screen-reader usability. A broader regression checkpoint is appropriate at the end of this development session when authorised.
+
+**Documentation refresh, 2026-11-07:** source and documentation review only. No automated tests, browser checks or simulations were run for this documentation task.
+
+### Test helper convention
+
+`tests/app.test.cjs` uses deterministic engine fixtures and a lightweight DOM stub. `setup()` defaults to `{autoFaceBoss: true}` so existing table-mechanics fixtures pass through introductions automatically. Tests of real introduction/progression barriers must use `setup(U, {autoFaceBoss: false})` (or the equivalent wrapped upgrade registry), explicitly press Face the Boss and check the intermediate phase. Existing showdown fixtures also dismiss ordinary hand overlays by default; overlay-specific cases opt out. DOM fixtures do not replace relevant browser interaction checks.
 
 ## Historical simulation findings
 
@@ -20,7 +52,7 @@ The supplied `simulation-results.json` is the baseline: 5,000 encounters for eac
 | Informed discard vs lowest-card discard | 59.46% | 58.09-60.81% |
 | Conservation + informed discard vs informed greedy | 54.84% | 53.46-56.22% |
 
-These compare complete heuristic strategy packages, not isolated proof of a decision's value or evidence of optimal play. See GAME_DESIGN.md and README.md for assumptions.
+These compare complete heuristic strategy packages, not isolated proof of a decision's value or evidence of optimal play. See GAME_DESIGN.md for strategy assumptions.
 
 | Boss | Informed greedy simulated player's encounter win rate |
 |---|---:|
@@ -34,16 +66,18 @@ Multiplying the five boss rates gives an estimated 23.74% run completion rate, a
 
 Across comparisons, tied hands occurred about 1.66-8.08% of the time; deck refresh exceptions occurred in 0-0.24% of encounters. Average encounters lasted about 2.25-2.73 hands; five bosses do not always mean fifteen hands. The maximum observed encounter length was eight hands. With one discard each hand, five full hands consume 22 cards and a sixth requires 26; without discards, seven full hands fit.
 
-## Validation and limits
+## Known limitations and deferred features
 
-The original ten automated tests cover all 2,024 triple rankings, kickers and equal suits, discard limits, carryover, card accounting, forced exhaustion, reproducibility, and UI transitions for five-boss completion, defeat and endless mode. All ten passed again after import under Node 24.21.0.
+- Runs are in-memory only. Refreshing or navigating home resets progress; there is no save/resume.
+- Current human balance, upgrade combinations and performance are not comprehensively measured. Historical simulations exclude upgrade effects and do not establish present-day completion rates.
+- Physical-device testing, screen-reader behaviour and broader accessibility need a confirmed validation record. Do not assume that headless mobile emulation establishes these.
+- Large supplied PNGs remain unmodified and may load slowly on mobile connections. Intrinsic sizing and text fallbacks mitigate presentation failures, not download size.
+- The local preview server binds only to 127.0.0.1 and does not provide a phone-sharing address. `captain-definition` prepares Nginx-based static serving on container port 80; its presence does not prove a build or deployment has occurred.
+- Current repository visibility, remote/push status, live hosting and any physical-device testing require owner confirmation. This document makes no claim about their present state.
+- No shop, currency, permanent progression/unlocks, account, backend or multiplayer is implemented. Those remain deferred, alongside save/resume. No license has been selected.
 
-The handoff reported browser checks for selection, replacement, showdown, carryover, victory and advancing to boss two, plus a 390 by 844 viewport without horizontal overflow. Those are historical checks; automated UI fixtures are not real browser or device tests.
+## Historical provenance
 
-Real iOS/Android touch testing, human balance and playability, deeper accessibility and performance still need validation. Refreshing resets a run; there is no save/resume. The local server binds only to 127.0.0.1 and supplies no phone sharing URL. No external runtime dependencies, framework or build step are required; Node 24 was used.
+The original local prototype was imported from `C:\Users\kyles\Documents\Codex\2026-11-05\referenced-chatgpt-conversation-this-is-an\outputs\dead-mans-hand` into `C:\Users\kyles\Documents\GitHub\dead-mans-hand`. The handoff recorded that the editable source, source ZIP and standalone playable HTML remained in the original output directory; the repository's editable files are the development source of truth, not the standalone export.
 
-## Next small step
-
-The upgrade selection and collection foundation is implemented. Final-boss victory now shows completion immediately; only choosing Endless generates the fifth reward, with an exhausted pool advancing directly. New run discards that unclaimed reward and resets the collection. Quick Draw is enabled: two player discards per hand at Level 1, three at Level 2. Lucky Break is also enabled: a mandatory two-card discard choice with one or two activations per boss, consuming one normal discard each time. Flexible Carry is enabled: an optional four-card refill followed by choosing one of six cards to discard, once or twice per boss. It spends no normal discard or Lucky Break use. Read the Table is enabled: one rank-only information activation per boss, revealing one or two distinct committed cards by level. Last Stand is enabled: two additive player discards per subsequent hand after the boss reaches one win, with timing and resets handled at the new-hand boundary. Peek Ahead is enabled: the compact player draw-pile card shows the actual next rank at Level 1 and adds its suit at Level 2, including during draw-ability choices; empty piles show no stale information. It is read-only and costs nothing. Historical simulations describe the baseline without upgrade effects; they do not measure the six enabled upgrades or their combinations. The Upgrades modal lists acquired levels, descriptions and implementation status. See `upgrades.js` for definitions and `tests/upgrades.test.cjs` plus the UI tests for offer, level and progression coverage.
-
-Review this collection flow before authorising individual upgrade effects. Real-device portrait testing on iOS and Android remains outstanding. No permanent progression, shop or currency has been introduced.
+At import, runtime files, tests and simulation results were preserved, and repository guidance/ignores/documentation were added. The original workspace was recorded as having no commits, pushes or deployment; an empty private remote and user-performed initial push were setup intentions. These statements describe that handoff only and must not be treated as current repository or hosting facts.

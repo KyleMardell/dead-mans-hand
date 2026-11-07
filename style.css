@@ -130,7 +130,7 @@ dialog.rules[open]{display:flex;flex-direction:column}
 }
 
 /* Poster and encounter details form one balanced header. */
-.gameplay .encounter-header{display:grid;grid-template-columns:136px minmax(0,170px);align-items:center;gap:28px;max-width:334px;margin:4px auto 26px;text-align:left}
+.gameplay .encounter-header{display:grid;grid-template-columns:128px minmax(0,170px);align-items:center;gap:28px;max-width:326px;margin:4px auto 26px;text-align:left}
 .encounter-info{min-width:0;text-align:center}
 .encounter-info .encounter-progress{align-items:center;margin:0 0 12px}
 .encounter-info .boss-sub{margin:0;line-height:1.4}
@@ -144,23 +144,22 @@ dialog.rules[open]{display:flex;flex-direction:column}
 .progress-track{display:block;width:58px;height:2px;background:var(--line)}
 .progress-track>span{display:block;height:100%;background:var(--gold)}
 .endless-progress{font-size:10px;letter-spacing:1.2px}
-.boss-artwork{width:100%;height:190.4px;margin:0;display:flex;align-items:center;justify-content:center}
+.boss-artwork{width:100%;height:179.2px;margin:0;display:flex;align-items:center;justify-content:center}
 .boss-portrait{display:block;width:100%;height:100%;object-fit:contain}
 .boss-portrait[hidden],.boss-fallback[hidden]{display:none}
 .encounter-header .boss-fallback{margin:0;font-size:26px;text-align:center}
 @media(min-width:501px){
-  .gameplay .encounter-header{grid-template-columns:160px minmax(0,180px);gap:36px;max-width:376px}
-  .boss-artwork{height:224px}
+  .gameplay .encounter-header{grid-template-columns:150px minmax(0,180px);gap:36px;max-width:366px}
+  .boss-artwork{height:210px}
 }
 @media(max-height:700px) and (max-width:500px){
-  .gameplay .encounter-header{grid-template-columns:100px minmax(0,170px);gap:24px;margin:0 auto 22px;max-width:294px}
-  .boss-artwork{height:140px}
+  .gameplay .encounter-header{grid-template-columns:96px minmax(0,170px);gap:24px;margin:0 auto 22px;max-width:290px}
+  .boss-artwork{height:134.4px}
   .encounter-header .boss-fallback{font-size:22px}
 }
 .gameplay .encounter-info .scoreboard{display:block;text-align:left;margin:12px 0}
 .gameplay .scoreboard .score-side{display:flex;align-items:center;gap:9px;min-width:0;font-size:11px;letter-spacing:1px;text-transform:uppercase}
 .gameplay .scoreboard b{font-size:24px}
-.score-hand{display:block;margin-top:5px;font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:1px;white-space:nowrap}
 
 .gameplay .opponent{margin:0 0 18px}
 .gameplay .table-status{border:0;padding:0;margin:0 0 24px}
@@ -192,7 +191,7 @@ body.playing .masthead{border-bottom:0}
 }
 
 /* Deck captions belong to their hands; selection feedback lives on the cards. */
-.boss-deck{margin:6px 0 0;font-size:9px;text-align:center;white-space:nowrap}
+.boss-deck{margin:6px 0 0;padding-bottom:6px;font-size:9px;text-align:center;white-space:nowrap}
 .player-deck{margin:8px auto 20px;max-width:560px;text-align:right;color:var(--muted);font-size:10px;line-height:1.4}
 .rack .actions [data-action="replace"]{flex:1}
 .rack .actions [data-action="play"]{flex:1.4}
@@ -210,7 +209,6 @@ body.playing .masthead{border-bottom:0}
 }
 
 /* Chips sit directly on the felt, with result feedback between the two sides. */
-.encounter-info>.score-hand{margin-top:18px}
 .table-centre{display:grid;grid-template-columns:72px minmax(0,1fr) 72px;align-items:center;gap:10px;max-width:560px;min-height:80px;margin:14px auto 20px;padding:6px 0}
 .chip-score{display:flex;flex-direction:column;align-items:center;gap:7px}
 .chip-label{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1.5px}
@@ -254,13 +252,16 @@ body.playing .masthead{border-bottom:0}
 
 .masthead-tools{display:flex;align-items:center;gap:8px}
 body.upgrades-open{overflow:hidden}
-.upgrade-screen{max-width:880px;padding-top:18px;padding-bottom:20px}
-.upgrade-screen .eyebrow{margin-bottom:8px;letter-spacing:1.5px}
-.upgrade-screen h1{font-size:36px;line-height:1.05;letter-spacing:-1px;margin-bottom:12px}
+.upgrade-screen{max-width:1180px;padding-top:18px;padding-bottom:20px}
+.upgrade-screen h1{font-size:36px;line-height:1.05;letter-spacing:-1px;margin-bottom:12px;text-align:center}
 .upgrade-stage{color:var(--gold);font-size:12px;line-height:1.4;margin-bottom:18px}
-.upgrade-offers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:20px}
-.upgrade-choice{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:7px;min-width:0;padding:20px 16px;border:2px solid #d8cfba;border-radius:7px;background:#f4eddf;color:#1c2926;box-shadow:0 3px 6px #0003}
-.upgrade-choice.chosen{border-color:var(--gold);outline:3px solid var(--gold);outline-offset:2px;background:#fff8e8}
+.upgrade-offers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:22px;margin-bottom:24px}
+.upgrade-choice{display:flex;flex-direction:column;align-items:stretch;text-align:left;min-width:0;width:100%;padding:0;border:0;border-radius:8px;background:transparent;color:var(--ink)}
+.upgrade-choice.chosen{outline:2px solid var(--gold);outline-offset:2px;background:#d9b8740d;box-shadow:0 0 16px #d9b87433}
+.upgrade-artwork{display:grid;align-items:center;width:100%;min-width:0}
+.upgrade-portrait{display:block;width:100%;height:auto;grid-area:1/1}
+.upgrade-fallback{display:flex;flex-direction:column;justify-content:center;gap:10px;grid-area:1/1;align-self:stretch;padding:16px;border:1px solid var(--gold);border-radius:7px;background:#f4eddf;color:#1c2926}
+.upgrade-portrait[hidden],.upgrade-fallback[hidden]{display:none}
 .upgrade-meta{font-size:10px;line-height:1.4;letter-spacing:.3px}
 .upgrade-name{display:block;font:25px/1.1 Georgia,serif}
 .upgrade-description{font-size:13px;line-height:1.45}
@@ -269,11 +270,18 @@ body.upgrades-open{overflow:hidden}
 .upgrade-collection li{padding:14px 0;border-top:1px solid var(--line)}
 .upgrade-collection h3{font-size:23px;margin-bottom:5px;color:var(--gold)}
 .upgrade-collection p{margin-bottom:6px}
+@media(max-width:1000px){
+  /* Reserve the navigation, heading, 50px Claim button and gaps. Keep a readable
+     minimum on unusually short screens and let the page scroll naturally. */
+  .upgrade-screen{--reward-card-height:max(132px,calc((100vh - 184px - env(safe-area-inset-top) - env(safe-area-inset-bottom))/3));padding:8px 16px calc(8px + env(safe-area-inset-bottom))}
+  @supports(height:100dvh){.upgrade-screen{--reward-card-height:max(132px,calc((100dvh - 184px - env(safe-area-inset-top) - env(safe-area-inset-bottom))/3))}}
+  .upgrade-screen h1{margin-bottom:8px}
+  .upgrade-offers{grid-template-columns:1fr;gap:8px;max-width:560px;margin:0 auto 10px}
+  .upgrade-choice{width:min(100%,calc(var(--reward-card-height)*var(--art-ratio)));justify-self:center}
+}
 @media(max-width:600px){
   .masthead-tools{gap:0}
   .masthead-tools .quiet{padding-left:7px;padding-right:7px}
-  .upgrade-offers{grid-template-columns:1fr;gap:10px;margin-bottom:16px}
-  .upgrade-choice{padding:12px 14px;gap:5px}
   .upgrade-name{font-size:23px}
   .upgrade-description{font-size:12px;line-height:1.4}
   .upgrade-screen h1{font-size:32px;margin-bottom:8px}
@@ -286,11 +294,75 @@ body.playing .masthead a{display:inline-flex;align-items:center;min-height:44px}
 .table-centre{min-height:clamp(104px,calc(100svh - 700px),160px);margin-top:16px;margin-bottom:22px;grid-template-columns:68px minmax(0,1fr) 68px;gap:14px}
 .player-chips{justify-self:start}
 .boss-chips{justify-self:end}
-.gameplay .table-centre .table-status h3{font-size:clamp(23px,4vw,29px);font-weight:600;line-height:1.12;margin-bottom:8px;text-wrap:balance}
-.gameplay .table-centre .table-status p{font-size:11px;line-height:1.45;text-wrap:balance}
+.gameplay .table-centre .table-status h3{font-size:clamp(25px,5vw,30px);font-weight:600;line-height:1.12;margin-bottom:8px;text-wrap:balance}
+.gameplay .table-centre .table-status p{font-size:15px;font-weight:500;color:#c6cec0;line-height:1.45;text-wrap:balance}
+.table-status .comparison-hand{display:inline-block}
+.table-status .comparison-vs{font-size:.8em;font-weight:400;color:var(--muted);margin-inline:.15em}
 .result-win h3{color:var(--green)}
 .result-loss h3{color:#e9a0a0}
 .result-tie h3{color:var(--gold)}
+/* Encounter milestones share a poster-led layout, separate from hand results. */
+.home-screen~.site-footer{display:none}
+.milestone-screen{display:flex;align-items:center;justify-content:center;max-width:760px;min-height:calc(100vh - 44px);min-height:calc(100dvh - 44px - env(safe-area-inset-top));padding:20px 24px max(20px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 40%,#d9b8740d,transparent 65%)}
+.milestone{--milestone-accent:var(--gold);width:100%;text-align:center;display:flex;flex-direction:column;align-items:center}
+.milestone .eyebrow{font-size:10px;letter-spacing:2px;margin:0 0 12px}
+.milestone h1{font-size:clamp(44px,12vw,76px);line-height:.98;letter-spacing:1px;text-transform:uppercase;color:var(--milestone-accent);margin:0 0 12px;text-wrap:balance}
+.milestone h1:focus{outline:none}
+.milestone-intro .encounter-progress{margin:0 auto 12px}
+.milestone.milestone-intro .boss-artwork{width:clamp(164px,30vh,250px);width:clamp(164px,30dvh,250px);margin:12px auto 20px;transform:rotate(-2deg)}
+.boss-intro-subtitle{font:18px/1.4 Georgia,serif;color:var(--muted);margin:0 0 26px}
+.milestone-subtitle{font:20px/1.3 Georgia,serif;color:var(--ink);margin:0}
+.milestone .boss-artwork{width:clamp(112px,22vh,190px);width:clamp(112px,22dvh,190px);height:auto;aspect-ratio:5/7;flex:none;margin:22px auto 30px;filter:drop-shadow(0 10px 16px #0006)}
+.milestone .boss-fallback{font-size:22px;margin:0;color:var(--ink)}
+.milestone-boss .boss-artwork{position:relative;transform:rotate(-5deg)}
+.defeat-mark{position:absolute;inset:0;width:100%;height:100%;fill:#9b302c;opacity:.92;pointer-events:none}
+.boss-artwork:has(.boss-portrait[hidden]) .defeat-mark{display:none}
+.milestone-loss{--milestone-accent:#e9a0a0}
+.milestone-loss h1{font-size:clamp(52px,15vw,88px)}
+.milestone-loss .boss-artwork{margin-top:28px}
+.milestone .actions{width:100%;max-width:390px;justify-content:center}
+.milestone .actions button{min-height:48px}
+.completion-seal{width:58px;height:58px;border:1px solid var(--gold);border-radius:50%;display:grid;place-items:center;margin:2px 0 18px;color:var(--gold);font:34px Georgia,serif;box-shadow:0 0 0 5px #d9b8740a,0 0 40px #d9b87415}
+.milestone-complete h1{text-shadow:0 0 30px #d9b87433}
+.milestone-complete .boss-artwork{width:clamp(100px,16vh,136px);width:clamp(100px,16dvh,136px);margin:18px auto}
+.milestone-message{font-size:13px;line-height:1.6;color:#c6cec0;max-width:340px;margin:0 0 22px;text-wrap:balance}
+@media(max-height:700px) and (max-width:500px){
+  .milestone-screen{padding:12px 20px max(14px,env(safe-area-inset-bottom))}
+  .milestone h1{font-size:42px}
+  .milestone-loss h1{font-size:50px}
+  .milestone .eyebrow{margin-bottom:10px;font-size:9px}
+  .milestone .boss-artwork{margin-top:16px;margin-bottom:22px}
+  .milestone-complete .boss-artwork{margin:12px auto}
+  .completion-seal{width:44px;height:44px;font-size:28px;margin-bottom:12px}
+  .milestone-message{font-size:12px;margin-bottom:16px}
+}
+@media(prefers-reduced-motion:no-preference){
+  .milestone h1,.milestone-subtitle,.completion-seal{animation:milestone-arrive .35s ease-out both}
+  .milestone .boss-artwork{animation:milestone-arrive .4s ease-out both}
+  .milestone-boss .boss-artwork{animation:poster-defeated .45s ease-out both}
+  .defeat-mark .paint-first{animation:paint-first .22s ease-out .24s both}
+  .defeat-mark .paint-second{animation:paint-second .22s ease-out .48s both}
+  .milestone-intro .boss-artwork{animation:poster-introduced .45s ease-out both}
+  .milestone-intro .encounter-progress,.boss-intro-subtitle{animation:milestone-arrive .3s ease-out both}
+  @keyframes milestone-arrive{from{opacity:.3;translate:0 8px}to{opacity:1;translate:0 0}}
+  @keyframes poster-defeated{from{opacity:.3;transform:translateY(-12px) rotate(3deg) scale(1.03)}to{opacity:1;transform:translateY(0) rotate(-5deg) scale(1)}}
+  @keyframes poster-introduced{from{opacity:.3;transform:translateY(-18px) rotate(5deg) scale(1.04)}to{opacity:1;transform:translateY(0) rotate(-2deg) scale(1)}}
+  @keyframes paint-first{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+  @keyframes paint-second{from{clip-path:inset(0 0 0 100%)}to{clip-path:inset(0 0 0 0)}}
+}
+/* Reusable felt result treatment; hand timing and dismissal stay in app.js. */
+.result-overlay{position:fixed;inset:0;z-index:50;display:grid;place-items:center;width:100%;height:100%;margin:0;padding:24px;border:0;background:radial-gradient(ellipse at center,#14261de8,#08110db8);color:var(--gold);cursor:pointer;touch-action:manipulation}
+.result-overlay[hidden]{display:none}
+.result-overlay[data-outcome="win"]{color:var(--green)}
+.result-overlay[data-outcome="loss"]{color:#e9a0a0}
+.result-overlay-message{display:block;max-width:100%;padding:22px 0;border-block:1px solid currentColor;font:500 clamp(38px,11vw,80px)/1.1 Georgia,"Times New Roman",serif;letter-spacing:2px;text-align:center;text-shadow:0 3px 16px #0008}
+.result-overlay:focus-visible{outline:2px solid var(--gold);outline-offset:-8px}
+@media(prefers-reduced-motion:no-preference){
+  .result-overlay{animation:result-overlay-fade 1.4s ease-out both}
+  .result-overlay-message{animation:result-overlay-scale .2s ease-out both}
+  @keyframes result-overlay-fade{0%{opacity:0}12%,85%{opacity:1}100%{opacity:0}}
+  @keyframes result-overlay-scale{from{transform:scale(.96)}to{transform:scale(1)}}
+}
 .table-centre.encounter-ended{grid-template-columns:1fr 1fr;gap:8px 20px;padding-top:8px;padding-bottom:8px}
 .encounter-ended .table-status{grid-column:1 / -1;grid-row:1}
 .encounter-ended .chip-score{grid-row:2}
@@ -302,8 +374,8 @@ body.playing .masthead a{display:inline-flex;align-items:center;min-height:44px}
 }
 @media(max-height:700px) and (max-width:500px){
   .table-centre{min-height:88px;margin:8px auto 12px;gap:10px;grid-template-columns:65px minmax(0,1fr) 65px}
-  .gameplay .table-centre .table-status h3{font-size:21px}
-  .gameplay .table-centre .table-status p{font-size:10px}
+  .gameplay .table-centre .table-status h3{font-size:23px}
+  .gameplay .table-centre .table-status p{font-size:14px}
   .gameplay .table-centre .encounter-result h3{font-size:29px}
   .gameplay .table-centre .encounter-result p{font-size:16px}
 }
