@@ -28,7 +28,7 @@ test('each level reveals only ranks and positions of one or two distinct committ
 test('two distinct committed cards may correctly reveal the same rank', () => {
   const s=G.newEncounter(G.rng(3),{'read-the-table':2});
   s.sides[1].hand=[20,21,22,0,5];s.sides[1].pile=G.deck().filter(c=>!s.sides[1].hand.includes(c));s.bossCommitment=null;G.commitBossPlay(s,[20,21,22]);
-  G.readTheTable(s,()=>0);assert.deepEqual(s.readTheTable.reveals,[{position:0,rank:'A'},{position:1,rank:'A'}]);
+  G.readTheTable(s,()=>0);assert.deepEqual(s.readTheTable.reveals,[{position:0,rank:G.ranks[5]},{position:1,rank:G.ranks[5]}]);
 });
 
 test('a committed boss cannot discard, reroll or submit different showdown cards', () => {

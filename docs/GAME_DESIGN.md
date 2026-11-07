@@ -4,16 +4,19 @@
 
 A mobile web Three Card Poker roguelite about choosing what wins now and what to conserve for later. Preserve the portrait-friendly Western card table and buildless implementation.
 
-- Each side has an independently shuffled 24-card deck: 9, 10, J, Q, K and Ace in four suits.
+- Each side has an independently shuffled 28-card deck: 8, 9, 10, J, Q, K and Ace in four suits.
 - Hold five cards. The base allowance is one optional discard per hand, modified for the player by Quick Draw and Last Stand. Each discarded card immediately draws one new card. Use allowances together or separately; a requested batch must fit both the remaining allowance and draw pile. Invalid requests consume nothing.
 - Select three cards for simultaneous showdown against the boss's committed three. Discarding is optional. Normally retain the other two cards and draw three for the next hand. Flexible Carry is the approved alternative below.
 - Played and discarded cards enter that side's out pile and stay unavailable until the next encounter or the deck refresh exception.
 - Rankings: straight flush > three of a kind > straight > flush > pair > high card. Compare relevant ranks and kickers; suits have equal value. Ace is high, and A-9-10 is not a straight.
-- First to two hand wins takes the encounter. Exact ties award neither side a point; both sides still put their played cards out and continue to another hand.
+- First to three hand wins takes the encounter. Exact ties award neither side a point; both sides still put their played cards out and continue to another hand.
+- Each side starts with three intact poker chips. Losing a hand marks one of that side's chips spent with the bullet-hole effect; ties spend no chips.
 - If either side cannot refill normally to five, **both sides receive freshly shuffled decks and five new cards**, retaining the encounter score. This replaces the retained cards too. The table announces the refresh.
 - Bosses retain a maximum allowance of one discard per hand. Their difficulty comes from decisions, not privileged cards or guaranteed outcomes.
 - The boss decision is committed before player selection or discarding. Boss AI cannot see hidden player cards or future draw order; Read the Table reveals information from the existing commitment without allowing it to change.
 - One encounter loss ends the run. Five victories complete the initial run; Endless is optional. Run upgrades persist between bosses and into Endless, but New Run or a page refresh clears them. There is no save/resume.
+
+The 28-card, first-to-three format is approved following owner playtesting. `engine.js` centralises the encounter configuration in the frozen `rules` object (`lowestRank: 8, winsRequired: 3`); deck composition, scoring, chip counts and live rule instructions derive from it.
 
 ## Boss progression and decision policies
 
@@ -41,12 +44,12 @@ The fifth reward is deferred until the player chooses Endless from Run Complete.
 | Lucky Break | One activation per boss. | Two activations per boss. |
 | Flexible Carry | One activation per boss. | Two activations per boss. |
 | Read the Table | Once per boss, reveal the rank of one randomly selected committed boss card. | Once per boss, reveal ranks of two distinct randomly selected committed boss cards. |
-| Last Stand | Unique passive: two extra discards per subsequent hand once the boss has one win. | Not available; cannot stack or evolve. |
+| Last Stand | Unique passive: two extra discards per subsequent hand when the boss is one win from victory (two hand wins). | Not available; cannot stack or evolve. |
 | Peek Ahead | Always show the rank of the player's actual next draw. | Always show its rank and suit. |
 
 ### Discard allowances and Last Stand
 
-Quick Draw allowance resets at each new hand, including after a bilateral refresh. Last Stand activates only at the next-hand boundary after the boss earns its first win; it never changes the completed hand retroactively. It adds two to the base/Quick Draw allowance: totals are 3, 4 or 5. It remains active through ties while the boss has one win, does not accumulate, ends with the encounter and starts inactive at a new boss. Flexible Carry confirmation uses the same next-hand boundary. Boss allowances are unchanged.
+Quick Draw allowance resets at each new hand, including after a bilateral refresh. Last Stand activates only at the next-hand boundary when the boss is one win from victory (two hand wins); it never changes the completed hand retroactively. It adds two to the base/Quick Draw allowance: totals are 3, 4 or 5. It remains active through ties while the boss remains one win from victory, does not accumulate, ends with the encounter and starts inactive at a new boss. Flexible Carry confirmation uses the same next-hand boundary. Boss allowances are unchanged. The trigger is relative to `rules.winsRequired - 1`; the first boss hand win does not activate it.
 
 ### Lucky Break
 
@@ -103,9 +106,9 @@ Introductions remain until Face the Boss is pressed. Only then are decks created
 
 ## Simulation strategy assumptions
 
-Greedy chooses the strongest available triple; random selects a legal triple uniformly. Conservation scores current win equity plus 0.65 times expected next-hand equity from the retained pair, using a fresh-deck future estimate that does not fully model depletion. At 1-1 it uses greedy selection. The weight was chosen before the historical results.
+Greedy chooses the strongest available triple; random selects a legal triple uniformly. Conservation scores current win equity plus 0.65 times expected next-hand equity from the retained pair, using a fresh-deck future estimate that does not fully model depletion. When both sides are one win from victory (currently 2-2), it uses greedy selection. The weight was chosen before the historical results.
 
-Informed discarding averages possible draws from the unordered remaining card pool and discards only when expected strategy score improves. It does not know the next draw or opponent's hand. Equity uses the exact distribution of the strongest triple from a fresh random five-card hand. These are heuristic strategies, not optimal play. The preserved baseline has no upgrade effects and is not a measurement of current human difficulty; see PROJECT_STATUS.md.
+Informed discarding averages possible draws from the unordered remaining card pool and discards only when expected strategy score improves. It does not know the next draw or opponent's hand. Equity uses the exact distribution of the strongest triple from a fresh random five-card hand. These are heuristic strategies, not optimal play. The preserved baseline measured the earlier 24-card, first-to-two game, with greedy final-hand selection at 1-1 and no upgrade effects. It is not a measurement of the approved format or current human difficulty; see PROJECT_STATUS.md.
 
 ## Deferred features and boundaries
 

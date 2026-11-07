@@ -5,7 +5,7 @@ const G = require('../engine.js');
 function account(state) {
   const side=state.sides[0],pending=state.luckyBreak.pending?.candidates || [];
   const cards=[...side.hand,...side.pile,...side.out,...pending];
-  assert.equal(cards.length,24);assert.equal(new Set(cards).size,24);
+  assert.equal(cards.length,G.deck().length);assert.equal(new Set(cards).size,G.deck().length);
 }
 
 test('Lucky Break draws the next two, spends one discard/use and accounts for all cards before and after choice', () => {
@@ -14,7 +14,7 @@ test('Lucky Break draws the next two, spends one discard/use and accounts for al
     const side=s.sides[0],original=side.hand[2],candidates=side.pile.slice(0,2),boss=JSON.stringify(s.sides[1]);
     G.activateLuckyBreak(s,[original]);
     assert.equal(s.phase,'lucky-break');assert.equal(side.hand.length,4);assert.deepEqual(s.luckyBreak.pending.candidates,candidates);
-    assert.equal(side.pile.length,17);assert.deepEqual(side.out,[original]);account(s);
+    assert.equal(side.pile.length,G.deck().length-7);assert.deepEqual(side.out,[original]);account(s);
     assert.equal(G.remainingDiscards(side),1);assert.equal(s.luckyBreak.remaining,0);
     const before=JSON.stringify(s);assert.throws(()=>G.resolveLuckyBreak(s,original));assert.equal(JSON.stringify(s),before);
     assert.throws(()=>G.discard(s,0,side.hand[0]));

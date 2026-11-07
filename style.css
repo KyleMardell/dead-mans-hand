@@ -209,10 +209,10 @@ body.playing .masthead{border-bottom:0}
 }
 
 /* Chips sit directly on the felt, with result feedback between the two sides. */
-.table-centre{display:grid;grid-template-columns:72px minmax(0,1fr) 72px;align-items:center;gap:10px;max-width:560px;min-height:80px;margin:14px auto 20px;padding:6px 0}
+.table-centre{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:center;gap:10px;max-width:560px;min-height:80px;margin:14px auto 20px;padding:6px 0}
 .chip-score{display:flex;flex-direction:column;align-items:center;gap:7px}
 .chip-label{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1.5px}
-.chip-pair{display:flex;gap:7px}
+.chip-pair{display:flex;gap:4px}
 .poker-chip{position:relative;display:block;width:29px;height:29px;border:2px dashed var(--gold);border-radius:50%;background:#314b40;box-shadow:inset 0 0 0 3px #172522,inset 0 0 0 4px #d9b87488,0 2px 3px #0004}
 .poker-chip.spent{border-color:#788478;background:#29352d;box-shadow:inset 0 0 0 3px #172522,inset 0 0 0 4px #78847888}
 .poker-chip.spent::after{content:'';position:absolute;left:7px;top:6px;width:12px;height:12px;border-radius:45% 30% 50% 35%;background:#080e0b;border:2px solid #a7b4a966;transform:rotate(25deg);box-shadow:1px 0 0 #080e0b,-1px 1px 0 #080e0b}
@@ -291,7 +291,7 @@ body.upgrades-open{overflow:hidden}
 /* Give the felt and outcomes more presence while preserving touch targets. */
 body.playing .masthead{padding-top:max(0px,env(safe-area-inset-top));padding-bottom:0}
 body.playing .masthead a{display:inline-flex;align-items:center;min-height:44px}
-.table-centre{min-height:clamp(104px,calc(100svh - 700px),160px);margin-top:16px;margin-bottom:22px;grid-template-columns:68px minmax(0,1fr) 68px;gap:14px}
+.table-centre{min-height:clamp(104px,calc(100svh - 700px),160px);margin-top:16px;margin-bottom:22px;grid-template-columns:max-content minmax(0,1fr) max-content;gap:14px}
 .player-chips{justify-self:start}
 .boss-chips{justify-self:end}
 .gameplay .table-centre .table-status h3{font-size:clamp(25px,5vw,30px);font-weight:600;line-height:1.12;margin-bottom:8px;text-wrap:balance}
@@ -373,7 +373,7 @@ body.playing .masthead a{display:inline-flex;align-items:center;min-height:44px}
   @keyframes result-arrive{from{opacity:.55;transform:translateY(4px)}to{opacity:1;transform:none}}
 }
 @media(max-height:700px) and (max-width:500px){
-  .table-centre{min-height:88px;margin:8px auto 12px;gap:10px;grid-template-columns:65px minmax(0,1fr) 65px}
+  .table-centre{min-height:88px;margin:8px auto 12px;gap:10px;grid-template-columns:max-content minmax(0,1fr) max-content}
   .gameplay .table-centre .table-status h3{font-size:23px}
   .gameplay .table-centre .table-status p{font-size:14px}
   .gameplay .table-centre .encounter-result h3{font-size:29px}

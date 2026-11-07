@@ -4,6 +4,10 @@
 
 The playable mobile web roguelite now has five bosses, all six functional run upgrades and a complete introduction/reward/result flow. It remains buildless HTML/CSS/JavaScript, using Node 24 for local tools and no external runtime dependencies. The owner has reported completing a full five-boss run; that is human playtesting evidence, not a measured balance study or confirmation of a particular device.
 
+The owner has playtested and approved the 28-card, first-to-three encounter format as the official game rules. Each side independently shuffles 8 through Ace in four suits. Exact ties award no point. Three chips per side track the remaining hand losses before defeat. Last Stand starts at the next-hand boundary when the boss is one win from victory (two hand wins), adding two discards to the normal/Quick Draw allowance.
+
+The central `engine.js` configuration remains `rules: { lowestRank: 8, winsRequired: 3 }`. All six upgrade effects and limits otherwise remain unchanged, as do the five boss policies, per-boss reward cadence and Endless progression.
+
 Implemented presentation and interaction:
 
 - Illustrated boss wanted posters and six illustrated upgrade cards, with preserved proportions, accessible descriptions and text fallbacks. Artwork text does not determine upgrade effects.
@@ -30,9 +34,13 @@ The original ten automated tests covered all 2,024 triple rankings, kickers/equa
 
 Earlier upgrade/UI milestones reported a full suite of 70 passing tests. Later presentation, milestone and introduction work used focused regression and headless Chrome checks rather than rerunning the full suite after every change. Reported checks included 390 x 844 and 360 x 640 layouts where relevant, keyboard focus/dismissal, reduced motion, immediate transition controls, reward deferral, reset and duplicate-action guards. The latest painted-X/home polish also received a focused desktop visual check.
 
-Those results apply to the changes checked at the time. They do not establish that the entire current suite has passed after all subsequent edits, nor do headless checks establish physical iOS/Android behaviour or actual screen-reader usability. A broader regression checkpoint is appropriate at the end of this development session when authorised.
+A later end-of-session checkpoint passed the full 78-test suite and a representative controlled browser playthrough. The subsequent encounter-format implementation passed 81 relevant tests: 38 engine/upgrade checks, three additional format regressions and 40 UI checks. Those checks covered 28-card accounting, 8s, first-to-three scoring, relative Last Stand timing, other upgrade interactions, rewards, completion, Endless and restoration through the central settings. A focused 390 x 844 browser check confirmed usable three-chip spacing, visible gameplay controls and no horizontal overflow; showdown history can extend slightly below the viewport. The owner then playtested and approved the new format.
+
+These records apply to the versions checked at the time. They do not establish physical iOS/Android behaviour or actual screen-reader usability. No further test run is needed for this documentation-only approval update.
 
 **Documentation refresh, 2026-11-07:** source and documentation review only. No automated tests, browser checks or simulations were run for this documentation task.
+
+**Rules approval documentation update, 2026-11-07:** documentation consistency review only, relying on the recent 81 passing checks and owner playtesting. No automated tests, browser checks or simulations were rerun.
 
 ### Test helper convention
 
@@ -40,7 +48,7 @@ Those results apply to the changes checked at the time. They do not establish th
 
 ## Historical simulation findings
 
-The supplied `simulation-results.json` is the baseline: 5,000 encounters for each of seven strategy comparisons and five boss comparisons, 60,000 total. Seed 20261105, independently shuffled decks, alternating strategy seats, 95% Wilson intervals. Browser play and simulation share `engine.js`.
+The supplied `simulation-results.json` is the baseline: 5,000 encounters for each of seven strategy comparisons and five boss comparisons, 60,000 total. Seed 20261105, independently shuffled 24-card decks (9 through Ace), first to two wins, no upgrades, alternating strategy seats and 95% Wilson intervals. These are measurements of the earlier game, not the approved 28-card, first-to-three format. Browser play and simulation share `engine.js`; future simulations use the current central rules and must record their actual configuration rather than inherit the baseline assumptions.
 
 | Strategy comparison | Encounter wins | 95% Wilson interval |
 |---|---:|---:|
@@ -64,7 +72,7 @@ These compare complete heuristic strategy packages, not isolated proof of a deci
 
 Multiplying the five boss rates gives an estimated 23.74% run completion rate, assuming independent encounters. This is not a measured human completion rate or a locked difficulty target.
 
-Across comparisons, tied hands occurred about 1.66-8.08% of the time; deck refresh exceptions occurred in 0-0.24% of encounters. Average encounters lasted about 2.25-2.73 hands; five bosses do not always mean fifteen hands. The maximum observed encounter length was eight hands. With one discard each hand, five full hands consume 22 cards and a sixth requires 26; without discards, seven full hands fit.
+In that earlier 24-card, first-to-two baseline, tied hands occurred about 1.66-8.08% of the time; deck refresh exceptions occurred in 0-0.24% of encounters. Average encounters lasted about 2.25-2.73 hands; five bosses do not always mean fifteen hands. The maximum observed encounter length was eight hands. With one discard each hand, five full hands consume 22 cards and a sixth requires 26; without discards, seven full hands fit.
 
 ## Known limitations and deferred features
 

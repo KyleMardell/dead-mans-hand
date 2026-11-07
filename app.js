@@ -61,7 +61,7 @@ function commitBossDecision() {
 function intro() {
   app.className = 'home-screen';
   document.body.classList.remove('playing');
-  app.innerHTML = `<section class="intro"><h1>Dead Man’s<br>Hand</h1><p class="eyebrow">Play three. Keep two. Make them count.</p><div class="hero-cards" aria-hidden="true">${[12, 16, 20].map(c => cardMarkup(c)).join('')}</div><button class="primary" data-action="start">Take a seat <span aria-hidden="true">↗</span></button></section>`;
+  app.innerHTML = `<section class="intro"><h1>Dead Man’s<br>Hand</h1><p class="eyebrow">Play three. Keep two. Make them count.</p><div class="hero-cards" aria-hidden="true">${[12, 13, 14].map(r => cardMarkup((r - G.rules.lowestRank) * 4)).join('')}</div><button class="primary" data-action="start">Take a seat <span aria-hidden="true">↗</span></button></section>`;
 }
 function showBossIntroduction() {
   dismissHandResult();
@@ -100,7 +100,7 @@ function bossArtwork(defeated = false) {
 function scoreChips(sideIndex) {
   const spent = state.wins[1 - sideIndex];
   const label = sideIndex === 0 ? 'You' : 'Boss';
-  return `<div class="chip-score ${sideIndex === 0 ? 'player-chips' : 'boss-chips'}" role="img" aria-label="${label}: ${2 - spent} of 2 chips remaining; ${state.wins[sideIndex]} hands won"><span class="chip-label" aria-hidden="true">${label}</span><span class="chip-pair" aria-hidden="true">${[0, 1].map(i => `<span class="poker-chip${i < spent ? ' spent' : ''}"></span>`).join('')}</span></div>`;
+  return `<div class="chip-score ${sideIndex === 0 ? 'player-chips' : 'boss-chips'}" role="img" aria-label="${label}: ${G.rules.winsRequired - spent} of ${G.rules.winsRequired} chips remaining; ${state.wins[sideIndex]} hands won"><span class="chip-label" aria-hidden="true">${label}</span><span class="chip-pair" aria-hidden="true">${Array.from({length:G.rules.winsRequired}, (_, i) => `<span class="poker-chip${i < spent ? ' spent' : ''}"></span>`).join('')}</span></div>`;
 }
 function playerDrawPile() {
   const info = G.peekAhead(state);
@@ -158,7 +158,7 @@ function render() {
       </div>
     </header>
     <div class="opponent" aria-label="Boss cards"><div class="cards">${reveal ? state.last.plays[1].map(c=>cardMarkup(c)).join('') : backs()}</div>${reveal ? `<p class="opponent-label">${G.evaluate(state.last.plays[1]).name}</p>` : state.readTheTable.reveals.length ? `<span class="visually-hidden" role="status">Revealed boss ranks: ${state.readTheTable.reveals.map(r => r.rank).join(', ')}. Suits hidden.</span>` : ''}</div>
-    <div class="table-centre${ended ? ' encounter-ended' : ''}" role="group" aria-label="Encounter chips; first to two hand wins">
+    <div class="table-centre${ended ? ' encounter-ended' : ''}" role="group" aria-label="Encounter chips; first to ${G.rules.winsRequired} hand wins">
       ${scoreChips(0)}
       ${reveal ? `<div class="table-status result-${resultTone}${ended ? ' encounter-result' : ''}" role="status" aria-live="polite" aria-atomic="true"><h3>${title}</h3><p>${sub}</p></div>` : state.readTheTable.level ? `<button class="quiet read-action" data-action="read-table" aria-label="Read the Table; ${state.readTheTable.remaining} use remaining this boss" ${!state.readTheTable.remaining || !state.bossCommitment ? 'disabled' : ''}>Read the Table <span>${state.readTheTable.remaining} left</span></button>` : '<span></span>'}
       ${scoreChips(1)}
@@ -398,6 +398,10 @@ app.addEventListener('click', event => {
     case 'endless': if (run.phase !== 'complete' || endless) return; endless = true; beginReward(); break;
   }
 });
+// Keep prototype instructions in sync when the central encounter settings change.
+const rankList = [...G.ranks.slice(0, -1), 'Ace'].join(', ').replace(', Ace', ' and Ace');
+document.getElementById('rules-deck').innerHTML = `You and the boss each have your own independently shuffled <strong>${G.deck().length}-card deck</strong>: ${rankList} in all four suits.`;
+document.getElementById('rules-target').textContent = `First to win ${G.rules.winsRequired} hands takes the encounter.`;
 const rules = document.getElementById('rules');
 const rulesToggle = document.getElementById('rules-toggle');
 rulesToggle.addEventListener('click', () => {

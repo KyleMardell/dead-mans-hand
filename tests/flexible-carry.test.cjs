@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const G = require('../engine.js');
 
 function account(s) {
-  for(const side of s.sides){const cards=[...side.hand,...side.pile,...side.out];assert.equal(cards.length,24);assert.equal(new Set(cards).size,24);}
+  for(const side of s.sides){const cards=[...side.hand,...side.pile,...side.out];assert.equal(cards.length,G.deck().length);assert.equal(new Set(cards).size,G.deck().length);}
 }
 function showdown(s) { G.reveal(s,s.sides.map(side=>side.hand.slice(0,3))); }
 function tie(s) { s.sides[1]=structuredClone(s.sides[0]);s.sides[1].discardAllowance=1;showdown(s); }
@@ -23,14 +23,14 @@ test('Flexible Carry draws four, permits discarding retained or new cards, then 
     const player=s.sides[0],kept=player.hand.slice(),draws=player.pile.slice(0,4),boss=JSON.stringify(s.sides[1]),wins=[...s.wins];
     G.activateFlexibleCarry(s);
     assert.equal(s.phase,'flexible-carry');assert.equal(s.handNumber,1);assert.equal(s.flexibleCarry.remaining,1);
-    assert.deepEqual(player.hand,[...kept,...draws]);assert.equal(player.pile.length,15);assert.equal(JSON.stringify(s.sides[1]),boss);account(s);
+    assert.deepEqual(player.hand,[...kept,...draws]);assert.equal(player.pile.length,G.deck().length-9);assert.equal(JSON.stringify(s.sides[1]),boss);account(s);
     const before=JSON.stringify(s);
     assert.throws(()=>G.resolveFlexibleCarry(s,99));assert.throws(()=>G.nextHand(s));assert.throws(()=>G.discard(s,0,player.hand[0]));
     assert.throws(()=>G.activateLuckyBreak(s,[player.hand[0]]));assert.throws(()=>showdown(s));assert.throws(()=>G.activateFlexibleCarry(s));assert.equal(JSON.stringify(s),before);
     const discard=player.hand[discardIndex],expected=player.hand.filter(c=>c!==discard);
     G.resolveFlexibleCarry(s,discard);assert.equal(s.phase,'choose');assert.equal(s.handNumber,2);
-    assert.deepEqual(player.hand,expected);assert.equal(player.pile.length,15);assert.ok(player.out.includes(discard));
-    assert.equal(s.sides[1].hand.length,5);assert.equal(s.sides[1].pile.length,16);assert.deepEqual(s.wins,wins);account(s);
+    assert.deepEqual(player.hand,expected);assert.equal(player.pile.length,G.deck().length-9);assert.ok(player.out.includes(discard));
+    assert.equal(s.sides[1].hand.length,5);assert.equal(s.sides[1].pile.length,G.deck().length-8);assert.deepEqual(s.wins,wins);account(s);
     const after=JSON.stringify(s);assert.throws(()=>G.resolveFlexibleCarry(s,discard));assert.equal(JSON.stringify(s),after);
   }
 });

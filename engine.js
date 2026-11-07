@@ -1,10 +1,12 @@
 (function (root) {
   'use strict';
-  const ranks = ['9', '10', 'J', 'Q', 'K', 'A'];
+  // Local Scenario C prototype. Restore Scenario A with lowestRank: 9, winsRequired: 2.
+  const rules = Object.freeze({ lowestRank: 8, winsRequired: 3 });
+  const ranks = ['8', '9', '10', 'J', 'Q', 'K', 'A'].slice(rules.lowestRank - 8);
   const suits = ['♠', '♥', '♣', '♦'];
   const names = ['High card', 'Pair', 'Flush', 'Straight', 'Three of a kind', 'Straight flush'];
-  const deck = () => Array.from({ length: 24 }, (_, i) => i);
-  const rank = c => 9 + Math.floor(c / 4);
+  const deck = () => Array.from({ length: ranks.length * suits.length }, (_, i) => i);
+  const rank = c => rules.lowestRank + Math.floor(c / 4);
   const suit = c => c % 4;
   const label = c => ranks[Math.floor(c / 4)] + suits[suit(c)];
   function rng(seed) {
@@ -22,7 +24,7 @@
     walk(0, []); return out;
   }
   function evaluate(cards) {
-    if (cards.length !== 3 || new Set(cards).size !== 3 || cards.some(c => !Number.isInteger(c) || c < 0 || c > 23)) throw Error('Choose three distinct cards.');
+    if (cards.length !== 3 || new Set(cards).size !== 3 || cards.some(c => !Number.isInteger(c) || c < 0 || c >= ranks.length * suits.length)) throw Error('Choose three distinct cards.');
     const r = cards.map(rank).sort((a, b) => b - a);
     const flush = cards.every(c => suit(c) === suit(cards[0]));
     const straight = r[0] - r[1] === 1 && r[1] - r[2] === 1;
@@ -178,7 +180,7 @@
     if (index === 1 && state.bossCommitment) return [...state.bossCommitment];
     const side = state.sides[index];
     const style = random() < (policy.skill ?? 1) ? policy.style : 'random';
-    const final = state.wins[index] === 1 && state.wins[1 - index] === 1;
+    const final = state.wins.every(wins => wins === rules.winsRequired - 1);
     const card = discardChoice(side, policy.discard, style === 'random' ? 'greedy' : style, final);
     if (card !== null) discard(state, index, card);
     return choose(side.hand, style, random, final).cards;
@@ -191,7 +193,7 @@
     if (result) state.wins[result > 0 ? 0 : 1]++; else state.ties++;
     plays.forEach((cards, i) => { const side = state.sides[i]; side.hand = side.hand.filter(c => !cards.includes(c)); side.out.push(...cards); });
     state.last = { plays: plays.map(c => [...c]), result, scores };
-    state.winner = state.wins[0] === 2 ? 0 : state.wins[1] === 2 ? 1 : null;
+    state.winner = state.wins[0] === rules.winsRequired ? 0 : state.wins[1] === rules.winsRequired ? 1 : null;
     if (state.winner !== null) state.lastStand.active = false;
     state.phase = 'reveal'; return state.last;
   }
@@ -202,7 +204,7 @@
       state.sides = state.sides.map(side => newSide(random, side.discardAllowance ?? 1)); state.refreshes++; refreshed = true;
     } else state.sides.forEach(side => { side.hand.push(...side.pile.splice(0, 5 - side.hand.length)); side.discarded = false; side.discardsUsed = 0; });
     // Apply the passive only at the new-hand boundary, never to a resolved hand.
-    state.lastStand.active = state.lastStand.owned && state.wins[1] === 1;
+    state.lastStand.active = state.lastStand.owned && state.wins[1] === rules.winsRequired - 1;
     if (state.lastStand.owned) state.sides[0].discardAllowance = state.lastStand.baseAllowance + (state.lastStand.active ? 2 : 0);
     state.bossCommitment = null; state.readTheTable.reveals = [];
     state.handNumber++; state.phase = 'choose'; return refreshed;
@@ -231,7 +233,7 @@
     }
     throw Error('Simulation did not terminate within 1000 hands.');
   }
-  const api = { ranks, suits, names, deck, rank, suit, label, rng, shuffle, combinations, evaluate, score, strongest, prepareModel, choose, newEncounter, discard, remainingDiscards, peekAhead, activateLuckyBreak, resolveLuckyBreak, canFlexibleCarry, activateFlexibleCarry, resolveFlexibleCarry, commitBossPlay, readTheTable, discardChoice, aiTurn, reveal, nextHand, policies, bosses, simulate };
+  const api = { rules, ranks, suits, names, deck, rank, suit, label, rng, shuffle, combinations, evaluate, score, strongest, prepareModel, choose, newEncounter, discard, remainingDiscards, peekAhead, activateLuckyBreak, resolveLuckyBreak, canFlexibleCarry, activateFlexibleCarry, resolveFlexibleCarry, commitBossPlay, readTheTable, discardChoice, aiTurn, reveal, nextHand, policies, bosses, simulate };
   if (typeof module !== 'undefined') module.exports = api;
   else root.DMH = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

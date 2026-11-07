@@ -1,11 +1,46 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const G = require('../engine.js');
-const card = (r, s = 0) => (r - 9) * 4 + s;
-test('all 2024 triples: exact category counts and suit-independent equality', () => {
+const card = (r, s = 0) => (r - G.rules.lowestRank) * 4 + s;
+test('prototype decks contain all 28 cards, independently shuffled, with valid low and high boundaries', () => {
+  assert.deepEqual(G.rules,{lowestRank:8,winsRequired:3});
+  assert.deepEqual(G.ranks,['8','9','10','J','Q','K','A']);
+  const s=G.newEncounter(G.rng(42));
+  for(const side of s.sides){
+    assert.deepEqual([...side.hand,...side.pile].sort((a,b)=>a-b),G.deck());
+    assert.equal(side.pile.length,23);
+    for(let rank=8;rank<=14;rank++)assert.equal(G.deck().filter(c=>G.rank(c)===rank).length,4);
+  }
+  assert.notDeepEqual(s.sides[0].hand,s.sides[1].hand);
+  assert.equal(G.evaluate([card(8),card(9,1),card(10,2)]).category,3);
+  assert.equal(G.evaluate([card(8),card(9),card(10)]).category,5);
+  assert.equal(G.evaluate([card(14),card(8,1),card(9,2)]).category,0);
+  assert.equal(G.evaluate([24,25,27]).category,4);
+  for(const cards of [[-1,1,2],[0,1,28],[0,0,1]])assert.throws(()=>G.evaluate(cards));
+});
+
+test('each side must earn three wins; ties and two wins never end an encounter', () => {
+  for(const winner of [0,1]){
+    const s=G.newEncounter(G.rng(6));
+    for(let win=1;win<=G.rules.winsRequired;win++){
+      const good=[24,25,26,0,1],bad=[0,5,14,18,20];
+      s.sides.forEach((side,i)=>{side.hand=[...(i===winner?good:bad)];side.pile=G.deck().filter(c=>!side.hand.includes(c));side.out=[];});
+      G.reveal(s,s.sides.map(side=>side.hand.slice(0,3)));
+      assert.equal(s.wins[winner],win);
+      assert.equal(s.winner,win===G.rules.winsRequired?winner:null);
+      if(s.winner!==null){assert.throws(()=>G.nextHand(s));break;}
+      G.nextHand(s,G.rng(win));
+      s.sides[1]=structuredClone(s.sides[0]);
+      G.reveal(s,s.sides.map(side=>side.hand.slice(0,3)));
+      assert.equal(s.wins[winner],win);assert.equal(s.winner,null);
+      G.nextHand(s,G.rng(win+10));
+    }
+  }
+});
+test('all 3276 triples: exact category counts and suit-independent equality', () => {
   const counts = Array(6).fill(0);
   for (const c of G.combinations(G.deck(), 3)) counts[G.evaluate(c).category]++;
-  assert.deepEqual(counts, [960, 720, 64, 240, 24, 16]);
+  assert.deepEqual(counts, [1800, 1008, 120, 300, 28, 20]);
   assert.equal(G.score([card(12), card(13), card(14)]), G.score([card(12, 1), card(13, 1), card(14, 1)]));
 });
 test('ranking order, pair rank before kicker, no ace wraparound', () => {
@@ -22,32 +57,32 @@ test('discard once, carry two cards, never reuse out cards, reject invalid play'
   const kept = s.sides.map(x => x.hand.slice(3));
   assert.throws(() => G.reveal(s, [[discarded, ...plays[0].slice(1)], plays[1]]));
   G.reveal(s, plays); assert.throws(() => G.reveal(s, plays)); G.nextHand(s, G.rng(1));
-  s.sides.forEach((x, i) => { assert.ok(kept[i].every(c => x.hand.includes(c))); assert.equal(new Set([...x.hand, ...x.pile, ...x.out]).size, 24); assert.equal(x.hand.length + x.pile.length + x.out.length, 24); assert.ok(x.out.every(c => !x.hand.includes(c))); });
+  s.sides.forEach((x, i) => { assert.ok(kept[i].every(c => x.hand.includes(c))); assert.equal(new Set([...x.hand, ...x.pile, ...x.out]).size,G.deck().length); assert.equal(x.hand.length + x.pile.length + x.out.length,G.deck().length); assert.ok(x.out.every(c => !x.hand.includes(c))); });
 });
 test('ties award no wins; repeated ties exhaust decks and refresh both retaining score', () => {
   const random = G.rng(9), s = G.newEncounter(random);
   // Duplicate independently legal deck states to force ties, not a shared deck.
   s.sides[1] = structuredClone(s.sides[0]); s.wins = [1, 0];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     s.sides.forEach((x, j) => { if (x.pile.length) G.discard(s, j, x.hand[0]); });
     const plays = s.sides.map(x => x.hand.slice(0, 3)); G.reveal(s, plays);
     assert.deepEqual(s.wins, [1, 0]); assert.equal(s.winner, null);
     const refreshed = G.nextHand(s, random);
-    if (refreshed) { assert.equal(s.refreshes, 1); assert.ok(s.sides.every(x => x.hand.length === 5 && x.pile.length === 19 && x.out.length === 0)); break; }
+    if (refreshed) { assert.equal(s.refreshes, 1); assert.ok(s.sides.every(x => x.hand.length === 5 && x.pile.length === G.deck().length - 5 && x.out.length === 0)); break; }
   }
   assert.equal(s.refreshes, 1);
 });
-test('first to two stops immediately; deck order cannot influence discard decision', () => {
+test('first to three stops immediately; deck order cannot influence discard decision', () => {
   const s = G.newEncounter(G.rng(2));
-  const a = { hand: [0, 4, 8, 13, 18], pile: [1, 2, 3, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 17, 19, 20, 21, 22, 23], discarded: false };
+  const a = { hand: [0, 4, 8, 13, 18], pile: G.deck().filter(c=>![0,4,8,13,18].includes(c)), discarded: false };
   assert.equal(G.discardChoice(a, 'expected'), G.discardChoice({ ...a, pile: [...a.pile].reverse() }, 'expected'));
-  s.sides[0].hand = [20, 21, 22, 0, 1]; s.sides[1].hand = [0, 5, 10, 11, 12]; s.wins = [1, 0];
+  s.sides[0].hand = [20, 21, 22, 0, 1]; s.sides[1].hand = [0, 5, 10, 11, 12]; s.wins = [G.rules.winsRequired-1, 0];
   G.reveal(s, [[20, 21, 22], [0, 5, 10]]); assert.equal(s.winner, 0); assert.throws(() => G.nextHand(s));
 });
 test('seeded strategies are reproducible and encounters terminate', () => {
   for (let seed = 1; seed <= 100; seed++) {
     const r = G.simulate(G.policies.greedy, G.policies.conserve, seed);
-    assert.ok(r.hands >= 2); assert.ok(r.winner === 0 || r.winner === 1);
+    assert.ok(r.hands >= G.rules.winsRequired); assert.ok(r.winner === 0 || r.winner === 1);
     if (seed === 1) assert.deepEqual(r, G.simulate(G.policies.greedy, G.policies.conserve, seed));
   }
 });
@@ -58,7 +93,7 @@ test('one depleted side refreshes both, while an empty pile forbids replacement'
   G.reveal(s,s.sides.map(x=>x.hand.slice(0,3)));
   const wins=[...s.wins]; assert.equal(G.nextHand(s,random),true);
   assert.deepEqual(s.wins,wins);
-  s.sides.forEach(x=>{assert.equal(x.pile.length,19);assert.equal(x.out.length,0);assert.equal(x.hand.length,5);});
+  s.sides.forEach(x=>{assert.equal(x.pile.length,G.deck().length-5);assert.equal(x.out.length,0);assert.equal(x.hand.length,5);});
 });
 
 test('batch discards validate allowance, duplicates, held cards and draw supply atomically', () => {
@@ -82,8 +117,8 @@ test('two-card batch preserves card accounting and per-hand allowance resets', (
   const cards=side.hand.slice(0,2),draws=side.pile.slice(0,2);
   G.discard(s,0,cards);
   assert.ok(draws.every(c=>side.hand.includes(c)));assert.ok(cards.every(c=>side.out.includes(c)));
-  assert.equal(side.hand.length,5);assert.equal(side.pile.length,17);assert.equal(G.remainingDiscards(side),0);
-  assert.equal(new Set([...side.hand,...side.pile,...side.out]).size,24);
+  assert.equal(side.hand.length,5);assert.equal(side.pile.length,G.deck().length-7);assert.equal(G.remainingDiscards(side),0);
+  assert.equal(new Set([...side.hand,...side.pile,...side.out]).size,G.deck().length);
   G.reveal(s,s.sides.map(x=>x.hand.slice(0,3)));G.nextHand(s,G.rng(4));
   assert.equal(G.remainingDiscards(s.sides[0]),2);assert.equal(s.sides[0].discardsUsed,0);
   assert.equal(G.remainingDiscards(s.sides[1]),1);
@@ -96,8 +131,8 @@ test('Quick Draw levels grant only the player 1, 2 or 3 discards; batches and se
     const cards=side.hand.slice(0,level+1);
     if(batch)G.discard(s,0,cards);else cards.forEach(c=>G.discard(s,0,c));
     assert.equal(G.remainingDiscards(side),0);assert.equal(side.discardsUsed,level+1);
-    assert.equal(side.hand.length,5);assert.equal(side.pile.length,19-level-1);
-    assert.equal(new Set([...side.hand,...side.pile,...side.out]).size,24);
+    assert.equal(side.hand.length,5);assert.equal(side.pile.length,G.deck().length-5-level-1);
+    assert.equal(new Set([...side.hand,...side.pile,...side.out]).size,G.deck().length);
     const before=JSON.stringify(s);assert.throws(()=>G.discard(s,0,side.hand[0]));assert.equal(JSON.stringify(s),before);
     G.reveal(s,s.sides.map(x=>x.hand.slice(0,3)));G.nextHand(s,random);
     assert.equal(G.remainingDiscards(s.sides[0]),level+1);assert.equal(s.sides[0].discardsUsed,0);
@@ -114,7 +149,7 @@ test('Quick Draw survives bilateral exhaustion refreshes without duplicating car
   G.reveal(s,s.sides.map(x=>x.hand.slice(0,3)));const wins=[...s.wins];
   assert.equal(G.nextHand(s,random),true);assert.deepEqual(s.wins,wins);
   assert.equal(G.remainingDiscards(s.sides[0]),3);assert.equal(G.remainingDiscards(s.sides[1]),1);
-  s.sides.forEach(side=>{assert.equal(side.hand.length,5);assert.equal(side.pile.length,19);assert.equal(side.out.length,0);assert.equal(new Set([...side.hand,...side.pile]).size,24);});
+  s.sides.forEach(side=>{assert.equal(side.hand.length,5);assert.equal(side.pile.length,G.deck().length-5);assert.equal(side.out.length,0);assert.equal(new Set([...side.hand,...side.pile]).size,G.deck().length);});
 });
 
 test('Peek Ahead does not change encounter permissions or cards', () => {

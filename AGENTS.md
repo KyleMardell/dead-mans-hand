@@ -6,6 +6,7 @@
 - Core responsibilities: `engine.js` contains shared poker rules, AI and gameplay effects; `upgrades.js` contains upgrade definitions, levels, eligibility and artwork metadata; `app.js` handles browser presentation, interaction and run transitions. The browser and simulation share the engine.
 - Read only documentation relevant to the task. Verify implementation where documentation may be stale; do not reread every document for each small follow-up.
 - The six upgrades, rewards, boss introductions and milestone screens are approved, implemented features. Discuss new major gameplay, balance, architecture or progression changes before implementing them. Shops, currency and permanent unlocks remain deferred.
+- The approved encounter format is independent 28-card decks (8 through Ace), first to three wins and three chips per side. Preserve the central `engine.js` `rules` configuration; Last Stand triggers at the next-hand boundary when the boss reaches `rules.winsRequired - 1` wins.
 - Never give bosses hidden player-card or future-draw knowledge. Preserve committed boss decisions and information boundaries.
 - Preserve supplied artwork, aspect ratios, accessible fallbacks, reduced motion and immediately usable transition buttons. Artwork text does not define upgrade effects.
 - Do not add frameworks, backends or dependencies without a clear need discussed with the user. Do not invent a license. Do not commit, push, deploy, publish or enable hosting without explicit authorisation.

@@ -7,11 +7,11 @@ const G = require('../engine.js');
 const U = require('../upgrades.js');
 // Exercise real UI event handlers without a browser dependency. Engine fixtures
 // control outcomes so every run transition can be reached deterministically.
-function setup(upgradeSystem = U, {autoFaceBoss = true} = {}) {
+function setup(upgradeSystem = U, {autoFaceBoss = true, engine = G} = {}) {
   const elements = new Map(), timers = new Map(); let timerId = 0;
   const document = { getElementById:id=>elements.get(id), body:{classList:{add(){},remove(){}}}, activeElement:null };
-  for (const id of ['site-navigation','hand-result-overlay','hand-result-message','hand-result-announcement','app','rules','rules-toggle','rules-close','upgrades-toggle','upgrades-close','upgrades-dialog','upgrades-content']) elements.set(id,{ innerHTML:'', hidden:id==='hand-result-overlay', dataset:{}, open:false, attributes:{}, handlers:{}, addEventListener(type,fn){this.handlers[type]=fn;}, querySelector(){return null;}, setAttribute(key,value){this.attributes[key]=value;}, focus(){document.activeElement=this;}, showModal(){this.open=true;}, close(){this.open=false;this.handlers.close();} });
-  const context = vm.createContext({ DMH:G, DMHUpgrades:upgradeSystem, document, console, setTimeout(fn,delay){const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout(id){timers.delete(id);} });
+  for (const id of ['rules-deck','rules-target','site-navigation','hand-result-overlay','hand-result-message','hand-result-announcement','app','rules','rules-toggle','rules-close','upgrades-toggle','upgrades-close','upgrades-dialog','upgrades-content']) elements.set(id,{ innerHTML:'', hidden:id==='hand-result-overlay', dataset:{}, open:false, attributes:{}, handlers:{}, addEventListener(type,fn){this.handlers[type]=fn;}, querySelector(){return null;}, setAttribute(key,value){this.attributes[key]=value;}, focus(){document.activeElement=this;}, showModal(){this.open=true;}, close(){this.open=false;this.handlers.close();} });
+  const context = vm.createContext({ DMH:engine, DMHUpgrades:upgradeSystem, document, console, setTimeout(fn,delay){const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout(id){timers.delete(id);} });
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),context);
   const click = (action, card, upgrade, candidate, carry) => {
     elements.get('app').handlers.click({preventDefault(){},stopPropagation(){},target:{closest:()=>({disabled:false,dataset: carry !== undefined ? {carry:String(carry)} : candidate !== undefined ? {candidate:String(candidate)} : card === undefined ? {action,upgrade} : {card:String(card)}})}});
@@ -32,6 +32,12 @@ function fixture(ui, win, dismiss = true) {
   const cards = ui.read('state.sides[0].hand.slice(0,3)');
   cards.forEach(c=>ui.click(undefined,c)); ui.click('play');
   if(dismiss)ui.read('dismissHandResult()');
+}
+function finishEncounter(ui, win, dismiss = true) {
+  while(ui.read('state.winner')===null){
+    if(ui.read('state.phase')==='reveal'){ui.read('dismissHandResult()');ui.click('next');}
+    fixture(ui,win,dismiss);
+  }
 }
 function claimFirst(ui) {
   if(ui.read('run.phase') !== 'upgrade') return;
@@ -59,7 +65,7 @@ test('boss introduction starts at Drifter and blocks all gameplay until a single
 test('boss introduction follows each of the first four rewards and preserves upgrades until Face', () => {
   const ui=setup(U,{autoFaceBoss:false});ui.click('start');ui.click('face-boss');
   for(let b=0;b<4;b++){
-    fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+    finishEncounter(ui,true);ui.click('victory');
     assert.equal(ui.read('run.phase'),'upgrade');claimFirst(ui);
     assert.equal(ui.read('bossIndex'),b+1);assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('state'),null);
     assert.ok(ui.html().includes(G.bosses[b+1].title));
@@ -74,7 +80,7 @@ test('boss introduction follows each of the first four rewards and preserves upg
 test('boss introduction follows the deferred final reward without changing Undertaker difficulty', () => {
   let calls=0;const ui=setup({...U,offer(...args){calls++;return U.offer(...args);}},{autoFaceBoss:false});
   ui.click('start');ui.read('bossIndex=4;showBossIntroduction()');ui.click('face-boss');
-  fixture(ui,true);ui.click('next');fixture(ui,true);assert.equal(ui.read('run.phase'),'complete');assert.equal(calls,0);
+  finishEncounter(ui,true);assert.equal(ui.read('run.phase'),'complete');assert.equal(calls,0);
   ui.click('endless');assert.equal(ui.read('run.phase'),'upgrade');assert.equal(calls,1);claimFirst(ui);
   assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('state'),null);assert.equal(ui.read('bossIndex'),5);
   assert.match(ui.html(),/ENDLESS &middot; ENCOUNTER 6/);assert.doesNotMatch(ui.html(),/06.*\/ 05/);
@@ -86,9 +92,9 @@ test('boss introduction follows the deferred final reward without changing Under
 test('boss introduction remains mandatory with exhausted rewards in initial and subsequent Endless encounters', () => {
   const ui=setup(U,{autoFaceBoss:false});ui.click('start');
   ui.read('run.upgrades=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));bossIndex=4;showBossIntroduction()');
-  ui.click('face-boss');fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('endless');
+  ui.click('face-boss');finishEncounter(ui,true);ui.click('endless');
   assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('bossIndex'),5);assert.equal(ui.read('state'),null);
-  ui.click('face-boss');fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+  ui.click('face-boss');finishEncounter(ui,true);ui.click('victory');
   assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('bossIndex'),6);assert.equal(ui.read('run.offers.length'),0);
   assert.match(ui.html(),/ENDLESS &middot; ENCOUNTER 7/);ui.click('victory');assert.equal(ui.read('bossIndex'),6);
 });
@@ -97,7 +103,7 @@ test('boss introduction returns to Drifter with cleared upgrades after defeat or
   for(const won of [false,true]){
     let calls=0;const ui=setup({...U,offer(...args){calls++;return U.offer(...args);}},{autoFaceBoss:false});
     ui.click('start');ui.read(`run.upgrades={'quick-draw':2};bossIndex=${won?4:2};showBossIntroduction()`);ui.click('face-boss');
-    fixture(ui,won);ui.click('next');fixture(ui,won);if(!won)ui.click('loss');ui.click('start');
+    finishEncounter(ui,won);if(!won)ui.click('loss');ui.click('start');
     assert.equal(ui.read('run.phase'),'boss-intro');assert.equal(ui.read('state'),null);assert.equal(ui.read('bossIndex'),0);
     assert.equal(ui.read('Object.keys(run.upgrades).length'),0);assert.equal(ui.read('endless'),false);assert.equal(calls,0);
     assert.match(ui.html(),/assets\/images\/bosses\/drifter.png/);ui.click('face-boss');assert.equal(ui.read('state.sides[0].discardAllowance'),1);
@@ -147,11 +153,11 @@ test('hand result overlay supports immediate click and keyboard dismissal with n
 
 test('hand result overlay never interrupts boss victory, encounter defeat or final completion', () => {
   for(const won of [true,false]){
-    const ui=setup();ui.click('start');fixture(ui,won);ui.click('next');fixture(ui,won,false);
+    const ui=setup();ui.click('start');finishEncounter(ui,won,false);
     assert.notEqual(ui.read('state.winner'),null);assert.equal(ui.elements.get('hand-result-overlay').hidden,true);
     assert.equal(ui.timers.size,0);assert.match(ui.html(),won?/Boss Defeated/:/Run Over/);
   }
-  const ui=setup();ui.click('start');ui.read('bossIndex=4;state.wins=[1,0]');fixture(ui,true,false);
+  const ui=setup();ui.click('start');ui.read('bossIndex=4;state.wins=[G.rules.winsRequired-1,0]');fixture(ui,true,false);
   assert.equal(ui.read('run.phase'),'complete');assert.match(ui.html(),/Run Complete/);
   assert.equal(ui.elements.get('hand-result-overlay').hidden,true);assert.equal(ui.timers.size,0);
 });
@@ -162,18 +168,18 @@ test('five encounters advance only on victory, finish screen offers optional end
     assert.match(ui.html(),new RegExp('src="assets/images/bosses/'+['drifter','gambler','deputy','sheriff','undertaker'][b]+'[.]png"'));
     assert.equal(ui.read('bossIndex'),b); assert.deepEqual([...ui.read('state.wins')],[0,0]);
     fixture(ui,true); assert.equal(ui.read('state.winner'),null); ui.click('next');
-    fixture(ui,true); assert.equal(ui.read('state.winner'),0); ui.click('victory'); claimFirst(ui);
+    finishEncounter(ui,true); assert.equal(ui.read('state.winner'),0); ui.click('victory'); claimFirst(ui);
   }
   assert.match(ui.html(),/Run Complete/); assert.match(ui.html(),/Endless Mode/);
   ui.click('endless'); assert.equal(ui.read('run.phase'),'upgrade'); claimFirst(ui);
   assert.equal(ui.read('bossIndex'),5); assert.equal(ui.read('endless'),true);
   assert.match(ui.html(),/ENDLESS &middot; ENCOUNTER 6/); assert.match(ui.html(),/The Undertaker/); assert.match(ui.html(),/src="assets\/images\/bosses\/undertaker\.png"/);
-  fixture(ui,true); ui.click('next'); fixture(ui,true); ui.click('victory'); claimFirst(ui);
+  finishEncounter(ui,true); ui.click('victory'); claimFirst(ui);
   assert.equal(ui.read('bossIndex'),6);
   ui.click('start'); assert.equal(ui.read('bossIndex'),0); assert.equal(ui.read('endless'),false);
 });
 test('one encounter defeat ends run and retry starts from boss one', () => {
-  const ui = setup(); ui.click('start'); fixture(ui,false); ui.click('next'); fixture(ui,false);
+  const ui = setup(); ui.click('start'); finishEncounter(ui,false);
   assert.equal(ui.read('state.winner'),1); assert.match(ui.html(),/Run Over/);
   ui.click('loss'); assert.match(ui.html(),/The house remembers/); assert.match(ui.html(),/0 bosses defeated/);
   ui.click('start'); assert.deepEqual([...ui.read('state.wins')],[0,0]); assert.equal(ui.read('bossIndex'),0);
@@ -183,13 +189,13 @@ test('bosses one to four reward normally; final victory defers offer generation 
   let offersGenerated=0;
   const ui=setup({...U,offer(...args){offersGenerated++;return U.offer(...args);}});ui.click('start');
   for(let b=0;b<4;b++){
-    fixture(ui,true);ui.click('next');fixture(ui,true);
+    finishEncounter(ui,true);
     assert.equal(ui.read('run.phase'),'table');ui.click('victory');
     assert.equal(ui.read('run.phase'),'upgrade');assert.equal(offersGenerated,b+1);
     assert.equal(ui.read('bossIndex'),b);claimFirst(ui);assert.equal(ui.read('bossIndex'),b+1);
   }
   const collection=ui.read('JSON.stringify(run.upgrades)');
-  fixture(ui,true);ui.click('next');fixture(ui,true);
+  finishEncounter(ui,true);
   assert.equal(ui.read('run.phase'),'complete');assert.match(ui.html(),/Run Complete/);
   assert.doesNotMatch(ui.html(),/upgrade-choice|claim-upgrade/);assert.equal(offersGenerated,4);
   assert.equal(ui.read('JSON.stringify(run.upgrades)'),collection);assert.equal(ui.read('run.offers.length'),0);
@@ -215,7 +221,7 @@ test('bosses one to four reward normally; final victory defers offer generation 
 test('new run abandons the final reward without generating it and clears collected upgrades', () => {
   let calls=0;const ui=setup({...U,offer(...args){calls++;return U.offer(...args);}});ui.click('start');
   ui.read('bossIndex=4;run.upgrades={"quick-draw":2,"last-stand":1};startEncounter()');
-  fixture(ui,true);ui.click('next');fixture(ui,true);assert.equal(ui.read('run.phase'),'complete');
+  finishEncounter(ui,true);assert.equal(ui.read('run.phase'),'complete');
   assert.equal(calls,0);ui.click('start');
   assert.equal(ui.read('bossIndex'),0);assert.equal(ui.read('run.phase'),'table');assert.equal(ui.read('endless'),false);
   assert.equal(ui.read('Object.keys(run.upgrades).length'),0);assert.equal(ui.read('run.offers.length'),0);
@@ -226,7 +232,7 @@ test('new run abandons the final reward without generating it and clears collect
 test('an exhausted pool still shows completion first and skips reward selection only after Endless', () => {
   let calls=0;const ui=setup({...U,offer(...args){calls++;return U.offer(...args);}});ui.click('start');
   ui.read('bossIndex=4;run.upgrades=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));startEncounter()');
-  const collection=ui.read('JSON.stringify(run.upgrades)');fixture(ui,true);ui.click('next');fixture(ui,true);
+  const collection=ui.read('JSON.stringify(run.upgrades)');finishEncounter(ui,true);
   assert.equal(ui.read('run.phase'),'complete');assert.match(ui.html(),/Run Complete/);assert.equal(calls,0);
   ui.click('endless');assert.equal(calls,1);assert.equal(ui.read('bossIndex'),5);assert.equal(ui.read('run.phase'),'table');
   assert.equal(ui.read('run.offers.length'),0);assert.equal(ui.read('JSON.stringify(run.upgrades)'),collection);
@@ -280,7 +286,7 @@ test('future larger allowances support batch and sequential discards without gra
     if(batch){cards.forEach(c=>ui.click(undefined,c));ui.click('replace');}
     else {for(const card of cards){ui.click(undefined,card);ui.click('replace');}}
     assert.equal(ui.read('state.sides[0].out.length'),2);assert.equal(ui.read('selected.length'),0);
-    assert.equal(ui.read('state.sides[0].pile.length'),17);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),0);
+    assert.equal(ui.read('state.sides[0].pile.length'),G.deck().length-7);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),0);
     assert.match(ui.html(),/data-action="replace"[^>]*disabled/);
   }
 });
@@ -309,9 +315,9 @@ test('poster header keeps progress while hand counting continues without a visib
   vm.runInContext('state.handNumber=4;render()',ui.context);
   assert.equal(ui.read("state.handNumber"),4);assert.doesNotMatch(ui.html(),/class="score-hand"/);
   assert.doesNotMatch(ui.html(),/Hand 4\/3|boss-path/);
-  fixture(ui,true);assert.match(ui.html(),/Boss: 1 of 2 chips remaining/);ui.click('next');
+  fixture(ui,true);assert.match(ui.html(),/Boss: 2 of 3 chips remaining/);ui.click('next');
   assert.equal(ui.read("state.handNumber"),5);assert.doesNotMatch(ui.html(),/class="score-hand"/);
-  fixture(ui,true);ui.click('victory'); claimFirst(ui);
+  finishEncounter(ui,true);ui.click('victory'); claimFirst(ui);
   assert.match(ui.read('pathMarkup()'),/02 <span class="progress-total">\/ 05/);
 });
 
@@ -329,18 +335,30 @@ test('discard illuminates only for valid selections without blocking invalid att
 
 test('chips track the opposing hand wins; ties consume no chips', () => {
   const ui=setup();ui.click('start');
-  assert.equal((ui.html().match(/class="poker-chip"/g)||[]).length,4);
+  assert.equal((ui.html().match(/class="poker-chip"/g)||[]).length,6);
   fixture(ui,true);
-  assert.match(ui.read('scoreChips(0)'),/You: 2 of 2 chips remaining/);
-  assert.match(ui.read('scoreChips(1)'),/Boss: 1 of 2 chips remaining/);
+  assert.match(ui.read('scoreChips(0)'),/You: 3 of 3 chips remaining/);
+  assert.match(ui.read('scoreChips(1)'),/Boss: 2 of 3 chips remaining/);
   ui.click('next');fixture(ui,false);
-  assert.match(ui.read('scoreChips(0)'),/You: 1 of 2 chips remaining/);
-  assert.match(ui.read('scoreChips(1)'),/Boss: 1 of 2 chips remaining/);
+  assert.match(ui.read('scoreChips(0)'),/You: 2 of 3 chips remaining/);
+  assert.match(ui.read('scoreChips(1)'),/Boss: 2 of 3 chips remaining/);
   ui.click('next');
   vm.runInContext('state.sides[1]=JSON.parse(JSON.stringify(state.sides[0]));state.bossCommitment=null;bossPlay=G.commitBossPlay(state,state.sides[1].hand.slice(0,3));selected=[];render()',ui.context);
   const before=ui.read('scoreChips(0)+scoreChips(1)');
   [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');
   assert.equal(ui.read('state.last.result'),0);assert.equal(ui.read('scoreChips(0)+scoreChips(1)'),before);
+});
+
+test('instructions and chip counts follow the reversible central encounter settings',()=>{
+  for(const legacy of [false,true]){
+    const source=fs.readFileSync(path.join(__dirname,'../engine.js'),'utf8');
+    const module={exports:{}};
+    new Function('module',legacy?source.replace('lowestRank: 8, winsRequired: 3','lowestRank: 9, winsRequired: 2'):source)(module);
+    const engine=module.exports,ui=setup(U,{engine});ui.click('start');
+    assert.equal((ui.html().match(/class="poker-chip"/g)||[]).length,2*engine.rules.winsRequired);
+    assert.ok(ui.elements.get('rules-deck').innerHTML.includes(engine.deck().length+'-card deck'));
+    assert.ok(ui.elements.get('rules-target').textContent.includes('win '+engine.rules.winsRequired+' hands'));
+  }
 });
 
 test('Play button names all six evaluated hand types and defaults otherwise', () => {
@@ -359,7 +377,7 @@ test('milestone screens replace ended tables and keep immediate, guarded continu
   for(const won of [true,false]){
     const ui=setup();ui.click('start');fixture(ui,won);
     assert.match(ui.html(),new RegExp('table-status result-'+(won?'win':'loss')));
-    ui.click('next');fixture(ui,won);
+    finishEncounter(ui,won);
     assert.match(ui.html(),new RegExp('milestone milestone-'+(won?'boss':'loss')));
     assert.match(ui.html(),won?/>Boss Defeated<\//:/>Run Over<\//);
     if(won){assert.doesNotMatch(ui.html(),/class="milestone-subtitle"/);assert.match(ui.html(),/class="defeat-mark"/);}
@@ -378,7 +396,7 @@ test('milestone screens replace ended tables and keep immediate, guarded continu
 });
 
 test('reward selection gates advancement, claims once and retains collection with enabled passives', () => {
-  const ui=setup();ui.click('start');fixture(ui,true);ui.click('next');fixture(ui,true);
+  const ui=setup();ui.click('start');finishEncounter(ui,true);
   ui.click('victory');assert.equal(ui.read('run.phase'),'upgrade');assert.equal(ui.read('bossIndex'),0);
   const offers=[...ui.read('run.offers')];assert.equal(offers.length,3);assert.equal(new Set(offers).size,3);
   assert.match(ui.html(),/data-action="claim-upgrade" disabled/);
@@ -403,14 +421,14 @@ test('repeat rewards show improvements; endless advances normally when every upg
   const ui=setup();ui.click('start');
   const max=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));max['quick-draw']=1;
   vm.runInContext(`run.upgrades=${JSON.stringify(max)};endless=true;bossIndex=5`,ui.context);
-  fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+  finishEncounter(ui,true);ui.click('victory');
   assert.deepEqual([...ui.read('run.offers')],['quick-draw']);assert.match(ui.html(),/aria-label="Quick Draw; Improve from Level 1 to 2"/);
   claimFirst(ui);assert.equal(ui.read('run.upgrades["quick-draw"]'),2);assert.equal(ui.read('bossIndex'),6);
   assert.equal(ui.read('state.sides[0].discardAllowance'),3);
-  fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+  finishEncounter(ui,true);ui.click('victory');
   assert.equal(ui.read('bossIndex'),7);assert.equal(ui.read('run.phase'),'table');
   assert.equal(Object.keys(ui.read('run.upgrades')).length,6);
-  fixture(ui,false);ui.click('next');fixture(ui,false);ui.click('loss');
+  finishEncounter(ui,false);ui.click('loss');
   assert.match(ui.html(),/The house remembers/);ui.click('start');
   assert.equal(Object.keys(ui.read('run.upgrades')).length,0);assert.equal(ui.read('endless'),false);
 });
@@ -480,7 +498,7 @@ test('Lucky Break requires a confirmed candidate, blocks table actions and works
   [...ui.read('state.sides[0].hand.slice(0,3)')].forEach(c=>ui.click(undefined,c));ui.click('play');ui.read('dismissHandResult()');ui.click('next');
   assert.equal(ui.read('state.luckyBreak.remaining'),1);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),3);
   vm.runInContext('state.wins=[0,0]',ui.context);
-  fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');claimFirst(ui);
+  finishEncounter(ui,true);ui.click('victory');claimFirst(ui);
   assert.equal(ui.read('run.upgrades["lucky-break"]'),2);assert.equal(ui.read('state.luckyBreak.remaining'),2);
   ui.click('start');assert.equal(ui.read('state.luckyBreak.remaining'),0);assert.doesNotMatch(ui.html(),/data-action="lucky-break"/);
 });
@@ -513,7 +531,7 @@ test('Flexible Carry is optional between hands, locks its choice and retains upg
   assert.equal(ui.read('state.phase'),'choose');assert.equal(ui.read('state.sides[0].hand.length'),5);assert.equal(ui.read('selected.length'),0);
   assert.equal(ui.read('state.luckyBreak.remaining'),luckyBefore);assert.equal(ui.read('state.flexibleCarry.remaining'),1);
   assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),3);
-  fixture(ui,true);assert.equal(ui.read('state.winner'),0);assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);
+  finishEncounter(ui,true);assert.equal(ui.read('state.winner'),0);assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);
   ui.click('victory');assert.equal(ui.read('run.phase'),'upgrade');assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);
   claimFirst(ui);assert.equal(ui.read('run.upgrades["flexible-carry"]'),2);assert.equal(ui.read('state.flexibleCarry.remaining'),2);
   ui.click('start');assert.equal(ui.read('state.flexibleCarry.remaining'),0);
@@ -524,7 +542,7 @@ test('Flexible Carry is absent after defeat and when normal refill needs fresh d
   fixture(ui,true);vm.runInContext('state.sides[1].out.push(...state.sides[1].pile.splice(2));render()',ui.context);
   assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);const before=ui.read('JSON.stringify(state)');ui.click('flexible-carry');assert.equal(ui.read('JSON.stringify(state)'),before);
   ui.click('next');assert.equal(ui.read('state.refreshes'),1);assert.equal(ui.read('state.flexibleCarry.remaining'),1);
-  vm.runInContext('state.wins=[0,1]',ui.context);fixture(ui,false);
+  vm.runInContext('state.wins=[0,G.rules.winsRequired-1]',ui.context);fixture(ui,false);
   assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);ui.click('loss');assert.doesNotMatch(ui.html(),/data-action="flexible-carry"/);
 });
 
@@ -552,7 +570,7 @@ test('Read the Table reveals only committed ranks on five backs and preserves se
     assert.deepEqual([...ui.read('state.last.plays[1]')],[...ui.read('state.bossCommitment')]);
     ui.read('dismissHandResult()');ui.click('next');assert.equal(ui.read('state.readTheTable.remaining'),0);assert.equal(ui.read('state.readTheTable.reveals.length'),0);
     assert.match(ui.html(),/data-action="read-table"[^>]*disabled/);
-    vm.runInContext('state.wins=[0,0]',ui.context);fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');claimFirst(ui);
+    vm.runInContext('state.wins=[0,0]',ui.context);finishEncounter(ui,true);ui.click('victory');claimFirst(ui);
     assert.equal(ui.read('run.upgrades["read-the-table"]')>=level,true);assert.equal(ui.read('state.readTheTable.remaining'),1);
     ui.click('start');assert.equal(ui.read('state.readTheTable.remaining'),0);assert.doesNotMatch(ui.html(),/data-action="read-table"/);
   }
@@ -562,13 +580,13 @@ test('Last Stand counter and small indicator activate next hand, not on the losi
   const ui=setup();ui.click('start');vm.runInContext('run.upgrades={"last-stand":1,"quick-draw":1};startEncounter()',ui.context);
   assert.doesNotMatch(ui.html(),/Last Stand active/);fixture(ui,false);
   assert.equal(ui.read('state.wins[1]'),1);assert.equal(ui.read('state.sides[0].discardAllowance'),2);assert.doesNotMatch(ui.html(),/Last Stand active/);
-  ui.click('next');assert.match(ui.html(),/Last Stand active/);assert.match(ui.html(),/aria-label="Discard; 4 remaining"/);
+  ui.click('next');assert.doesNotMatch(ui.html(),/Last Stand active/);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),2);fixture(ui,false);assert.doesNotMatch(ui.html(),/Last Stand active/);ui.click('next');assert.match(ui.html(),/Last Stand active/);assert.match(ui.html(),/aria-label="Discard; 4 remaining"/);
   const cards=[...ui.read('state.sides[0].hand')];cards.forEach(c=>ui.click(undefined,c));const before=ui.read('JSON.stringify(state)');
   ui.click('replace');assert.equal(ui.read('JSON.stringify(state)'),before);assert.match(ui.html(),/only discard 4 cards/);
   ui.click(undefined,cards[4]);assert.match(ui.html(),/class="primary" data-action="replace"/);ui.click('replace');
   assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),0);assert.match(ui.html(),/data-action="replace"[^>]*disabled/);
   fixture(ui,true);ui.click('next');assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),4);assert.match(ui.html(),/Last Stand active/);
-  fixture(ui,true);assert.equal(ui.read('state.winner'),0);assert.doesNotMatch(ui.html(),/Last Stand active/);
+  finishEncounter(ui,true);assert.equal(ui.read('state.winner'),0);assert.doesNotMatch(ui.html(),/Last Stand active/);
   ui.click('victory');claimFirst(ui);assert.equal(ui.read('run.upgrades["last-stand"]'),1);assert.equal(ui.read('state.lastStand.active'),false);
   assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),1+(ui.read('run.upgrades["quick-draw"]')||0));
   ui.click('start');assert.equal(ui.read('state.lastStand.owned'),false);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),1);
@@ -576,7 +594,7 @@ test('Last Stand counter and small indicator activate next hand, not on the losi
 
 test('Last Stand waits for Flexible Carry confirmation and collection marks all upgrades implemented', () => {
   const ui=setup();ui.click('start');vm.runInContext('run.upgrades=Object.fromEntries(U.definitions.map(d=>[d.id,d.maxLevel]));startEncounter()',ui.context);
-  fixture(ui,false);assert.equal(ui.read('state.lastStand.active'),false);ui.click('flexible-carry');
+  ui.read('state.wins[1]=G.rules.winsRequired-2');fixture(ui,false);assert.equal(ui.read('state.lastStand.active'),false);ui.click('flexible-carry');
   assert.equal(ui.read('state.lastStand.active'),false);assert.equal(ui.read('state.sides[0].discardAllowance'),3);
   ui.click(undefined,undefined,undefined,undefined,ui.read('state.sides[0].hand[0]'));ui.click('carry-confirm');
   assert.equal(ui.read('state.lastStand.active'),true);assert.equal(ui.read('G.remainingDiscards(state.sides[0])'),5);
@@ -588,7 +606,7 @@ test('draw pile hides information without ownership and rank-only markup cannot 
   const ui=setup();ui.click('start');
   for(const level of [0,1]) {
     const variants=[];
-    for(const card of [20,21,22,23]) {
+    for(const card of [24,25,26,27]) {
       variants.push(ui.read(`state.peekAheadLevel=${level};state.sides[0].pile=[${card}];playerDrawPile()`));
     }
     assert.ok(variants.every(markup=>markup===variants[0]));
@@ -596,7 +614,7 @@ test('draw pile hides information without ownership and rank-only markup cannot 
     assert.match(variants[0],level ? /Next draw: A; suit hidden/ : /next card hidden/);
     if(!level)assert.doesNotMatch(variants[0],/peek-rank/);
   }
-  const markup=ui.read('state.peekAheadLevel=2;state.sides[0].pile=[21];playerDrawPile()');
+  const markup=ui.read('state.peekAheadLevel=2;state.sides[0].pile=[25];playerDrawPile()');
   assert.match(markup,/Next draw: A of hearts/);assert.match(markup,/mini-pile red/);assert.match(markup,/peek-suit/);
   assert.match(ui.read('state.sides[0].pile=[];playerDrawPile()'),/Your draw pile is empty/);
   assert.doesNotMatch(ui.read('playerDrawPile()'),/peek-rank|peek-suit/);
@@ -615,12 +633,12 @@ test('Peek Ahead renders current information during both draw abilities, persist
   ui.click(undefined,undefined,undefined,ui.read('state.luckyBreak.pending.candidates[0]'));ui.click('lucky-confirm');displayed();
   fixture(ui,true);ui.click('flexible-carry');displayed();
   ui.click(undefined,undefined,undefined,undefined,ui.read('state.sides[0].hand[0]'));ui.click('carry-confirm');displayed();
-  fixture(ui,true);ui.click('victory');claimFirst(ui);displayed();assert.equal(ui.read('state.peekAheadLevel'),2);
+  finishEncounter(ui,true);ui.click('victory');claimFirst(ui);displayed();assert.equal(ui.read('state.peekAheadLevel'),2);
   ui.click('start');assert.equal(ui.read('state.peekAheadLevel'),0);assert.match(ui.read('playerDrawPile()'),/next card hidden/);
 });
 
 test('illustrated offers use central artwork, accessible effect descriptions and offered levels', () => {
-  const ui=setup();ui.click('start');fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+  const ui=setup();ui.click('start');finishEncounter(ui,true);ui.click('victory');
   for(const d of U.definitions){
     for(let current=0;current<d.maxLevel;current++){
       ui.read(`run.offers=['${d.id}'];run.upgrades={'${d.id}':${current}};run.selectedUpgrade=null;renderUpgradeSelection()`);
@@ -638,7 +656,7 @@ test('illustrated offers use central artwork, accessible effect descriptions and
 });
 
 test('failed upgrade images expose readable fallback, preserve selection and stay usable after rerender', () => {
-  const ui=setup();ui.click('start');fixture(ui,true);ui.click('next');fixture(ui,true);ui.click('victory');
+  const ui=setup();ui.click('start');finishEncounter(ui,true);ui.click('victory');
   const id=ui.read('run.offers[0]'),d=U.get(id),fallback={hidden:true};
   const image={hidden:false,dataset:{upgradeArt:id},nextElementSibling:fallback,matches:selector=>selector==='.upgrade-portrait'};
   const before=ui.read('JSON.stringify({run,state,bossIndex,endless})');

@@ -16,11 +16,11 @@ If PowerShell blocks `npm.ps1`, use `npm.cmd start` or `npm.cmd test`; do not ch
 
 ## Game and progression
 
-Each side has its own shuffled 24-card deck: 9, 10, J, Q, K and Ace in four suits. Hold five cards, optionally discard within your allowance, then select three for showdown. Keep the other two and normally draw three for the next hand. Played and discarded cards stay out until a new boss or the bilateral deck refresh exception.
+Each side has its own independently shuffled 28-card deck: 8, 9, 10, J, Q, K and Ace in four suits. Hold five cards, optionally discard within your allowance, then select three for showdown. Keep the other two and normally draw three for the next hand. Played and discarded cards stay out until a new boss or the bilateral deck refresh exception.
 
-The base allowance is **one discard per hand**. Quick Draw raises it to two or three; Last Stand adds two when active. Discards can be used together or separately, provided enough cards remain to draw. Bosses retain a maximum allowance of one.
+The base allowance is **one discard per hand**. Quick Draw raises it to two or three; Last Stand adds two when active. Discards can be used together or separately, provided enough cards remain to draw. Bosses retain a maximum allowance of one. The approved encounter settings are centralised in `engine.js` as `rules`: `lowestRank: 8, winsRequired: 3`.
 
-Rankings are straight flush > three of a kind > straight > flush > pair > high card. Ace is high, suits are equal, and exact ties award no point. First to win two hands takes the encounter. If either side cannot refill normally, both receive fresh decks and five cards while keeping the encounter score.
+Rankings are straight flush > three of a kind > straight > flush > pair > high card. Ace is high, suits are equal, and exact ties award no point. First to win three hands takes the encounter. Each side starts with three poker chips; losing a hand spends one chip using the bullet-hole effect. Ties consume no chips. If either side cannot refill normally, both receive fresh decks and five cards while keeping the encounter score.
 
 Face **The Drifter → The Gambler → The Deputy → The Sheriff → The Undertaker**, with increasingly challenging decision policies. Losing an encounter ends the run.
 
@@ -39,7 +39,7 @@ After a boss victory, choose one of up to three distinct, randomly offered eligi
 | Lucky Break | Spend one discard to draw two candidates and keep one; one use per boss, or two at Level 2. |
 | Flexible Carry | Between hands, draw four alongside the two retained cards, then discard one of six; one use per boss, or two at Level 2. No normal discard is spent. |
 | Read the Table | Once per boss, reveal ranks from one committed boss card, or two distinct cards at Level 2. Suits stay hidden. |
-| Last Stand | Unique: starting next hand after the boss earns one win, add two discards per hand for that encounter. |
+| Last Stand | Unique: starting next hand when the boss is one win from victory (two hand wins), add two discards per hand for that encounter. |
 | Peek Ahead | Always show the next player draw's rank; Level 2 adds its suit. |
 
 Limited ability uses reset per boss, not per hand or deck refresh. See [GAME_DESIGN.md](docs/GAME_DESIGN.md) for requirements, accounting and edge cases. The How to Play guide and Upgrades dialog are available from the navigation.
@@ -67,7 +67,7 @@ The first selects relevant UI tests; the second runs the full suite. These are c
 | `simulate.cjs`, `simulation-results.json` | Seeded comparison harness and preserved historical baseline. |
 | `captain-definition` | CapRover definition using Nginx on container port 80 to serve browser files and artwork. Its presence does not establish deployment status. |
 
-`npm run simulate -- 5000` performs twelve seeded comparisons and **overwrites `simulation-results.json`**. It is for a defined balance investigation, not routine UI verification. [PROJECT_STATUS.md](docs/PROJECT_STATUS.md) retains the original findings and their limitations; those simulations exclude upgrade effects.
+`npm run simulate -- 5000` performs twelve seeded comparisons and **overwrites `simulation-results.json`**. It is for a defined balance investigation, not routine UI verification. [PROJECT_STATUS.md](docs/PROJECT_STATUS.md) retains the original findings and their limitations; those preserved simulations used the earlier 24-card, first-to-two format and exclude upgrade effects. They do not measure the approved format.
 
 ## Limitations and further information
 
